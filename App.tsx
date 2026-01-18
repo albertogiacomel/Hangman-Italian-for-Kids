@@ -4,6 +4,7 @@ import { Word, GameState, CategoryEmoji, Config, LETTER_NAMES_ITALIAN } from './
 import { INITIAL_WORDS, ITALIAN_ALPHABET } from './constants';
 import { HangmanVisual } from './components/HangmanVisual';
 import { Keyboard } from './components/Keyboard';
+import { AdBanner } from './components/AdBanner';
 import { speakWithGemini, speakInstant } from './services/geminiService';
 
 const CONFIG: Config = {
@@ -47,7 +48,6 @@ export default function App() {
     }
   };
 
-  // Monitora i cambiamenti di stato dello schermo intero (es. se premuto ESC)
   useEffect(() => {
     const handler = () => setIsFullScreen(!!document.fullscreenElement);
     document.addEventListener('fullscreenchange', handler);
@@ -241,6 +241,9 @@ export default function App() {
              Tentativi rimasti: <span className="font-bold text-red-500">{gameState.attemptsRemaining}</span>
           </div>
         </div>
+
+        {/* Posizionamento pubblicità Google */}
+        <AdBanner />
 
         {(gameState.gameStatus === 'won' || gameState.gameStatus === 'lost') && (
           <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
