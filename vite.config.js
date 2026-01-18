@@ -8,12 +8,14 @@ export default defineConfig(({ mode }) => {
   return {
     plugins: [react()],
     define: {
-      // Stringify the API key to inject it into the code at build/runtime
-      'process.env.API_KEY': JSON.stringify(env.API_KEY)
+      // Stringify the API key to inject it into the code at build/runtime.
+      // Fallback to empty string to prevent build errors if env is missing.
+      'process.env.API_KEY': JSON.stringify(env.API_KEY || '')
     },
     server: {
       host: '0.0.0.0',
-      port: 8080
+      port: 8080,
+      strictPort: true
     }
   };
 });
