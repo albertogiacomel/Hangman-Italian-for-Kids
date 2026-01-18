@@ -21,7 +21,10 @@ export default defineConfig(({ mode }) => {
       host: '0.0.0.0',
       port: 8080,
       strictPort: true,
-      allowedHosts: true
+      allowedHosts: [
+        'imparare-l-italiano-hangman-951398195520.us-west1.run.app',
+        'hangman.giacomel.info'
+      ]
     }
   };
 });
