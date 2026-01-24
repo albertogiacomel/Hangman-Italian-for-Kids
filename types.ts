@@ -4,6 +4,7 @@ export interface Word {
   english: string;
   category: string;
   difficulty: 'easy' | 'medium' | 'hard';
+  hint?: string;
 }
 
 export interface Config {
@@ -25,6 +26,9 @@ export interface GameState {
   wordsAttempted: string[];
   difficultyProgress: { easy: number; medium: number; hard: number };
   feedback: string;
+  streak: number;
+  totalStars: number;
+  hintsUsed: number; // 0 = none, 1 = text hint, 2 = letter reveal
 }
 
 export enum CategoryEmoji {
@@ -34,6 +38,15 @@ export enum CategoryEmoji {
   food = '🍎',
   people = '👨‍👩‍👧‍👦',
   verbs = '🏃',
+  numbers = '🔢',
+  time = '📅',
+  body = '🦵',
+  emotions = '😎',
+  weather = '⛈️',
+  nature = '🌲',
+  clothing = '👕',
+  transport = '🚀',
+  school = '🎒',
 }
 
 export const LETTER_NAMES_ITALIAN: Record<string, string> = {

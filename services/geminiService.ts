@@ -30,8 +30,10 @@ const decodeAudioData = async (
   return buffer;
 };
 
-// Singleton AudioContext per evitare lag di inizializzazione
+// Singleton AudioContext
 let sharedAudioCtx: AudioContext | null = null;
+// Simple In-Memory Cache: Key = "lang:text" -> Value = AudioBuffer
+const audioCache = new Map<string, AudioBuffer>();
 
 export const speakWithGemini = async (text: string, language: 'it' | 'en' = 'it') => {
   const apiKey = process.env.API_KEY;
@@ -43,6 +45,15 @@ export const speakWithGemini = async (text: string, language: 'it' | 'en' = 'it'
   }
   if (sharedAudioCtx.state === 'suspended') {
     await sharedAudioCtx.resume();
+  }
+
+  const cacheKey = `${language}:${text.toLowerCase()}`;
+  
+  // Check Cache
+  if (audioCache.has(cacheKey)) {
+    const audioBuffer = audioCache.get(cacheKey)!;
+    playBuffer(audioBuffer, sharedAudioCtx);
+    return;
   }
 
   const ai = new GoogleGenAI({ apiKey });
@@ -69,10 +80,11 @@ export const speakWithGemini = async (text: string, language: 'it' | 'en' = 'it'
     const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
     if (base64Audio && sharedAudioCtx) {
       const audioBuffer = await decodeAudioData(decode(base64Audio), sharedAudioCtx, 24000, 1);
-      const source = sharedAudioCtx.createBufferSource();
-      source.buffer = audioBuffer;
-      source.connect(sharedAudioCtx.destination);
-      source.start();
+      
+      // Save to Cache
+      audioCache.set(cacheKey, audioBuffer);
+      
+      playBuffer(audioBuffer, sharedAudioCtx);
     }
   } catch (error) {
     console.error("Gemini TTS Error:", error);
@@ -80,11 +92,18 @@ export const speakWithGemini = async (text: string, language: 'it' | 'en' = 'it'
   }
 };
 
+const playBuffer = (buffer: AudioBuffer, ctx: AudioContext) => {
+  const source = ctx.createBufferSource();
+  source.buffer = buffer;
+  source.connect(ctx.destination);
+  source.start();
+};
+
 // Funzione per feedback immediato senza latenza di rete
 export const speakInstant = (text: string, language: 'it' | 'en' = 'it') => {
   const utter = new SpeechSynthesisUtterance(text);
   utter.lang = language === 'it' ? 'it-IT' : 'en-US';
-  utter.rate = 1.1;
-  window.speechSynthesis.cancel(); // Interrompi pronunce precedenti per immediatezza
+  utter.rate = 0.9; // Leggermente più lento per chiarezza didattica
+  window.speechSynthesis.cancel(); 
   window.speechSynthesis.speak(utter);
 };
