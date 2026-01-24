@@ -59,6 +59,10 @@ export default function App() {
     setTheme(prev => prev === 'light' ? 'dark' : 'light');
   };
 
+  // Menu State
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [resetConfirm, setResetConfirm] = useState(false);
+
   // Load initial state from localStorage if available
   const getInitialState = (): GameState => {
     try {
@@ -134,6 +138,27 @@ export default function App() {
         setIsFullScreen(false);
       }
     }
+  };
+
+  const handleResetGame = () => {
+    localStorage.removeItem('italianHangmanState');
+    setGameState({
+      currentWord: null,
+      currentDifficulty: 'easy',
+      wordsCompleted: 0,
+      successCount: 0,
+      guessedLetters: [],
+      attemptsRemaining: CONFIG.max_attempts,
+      gameStatus: 'new',
+      wordsAttempted: [],
+      difficultyProgress: { easy: 0, medium: 0, hard: 0 },
+      feedback: '',
+      streak: 0,
+      totalStars: 0,
+      hintsUsed: 0
+    });
+    setResetConfirm(false);
+    setIsMenuOpen(false);
   };
 
   useEffect(() => {
@@ -416,6 +441,17 @@ export default function App() {
               </svg>
             )}
           </button>
+
+          {/* Menu Button */}
+          <button 
+            onClick={() => setIsMenuOpen(true)}
+            className="p-2 bg-gray-50 dark:bg-gray-800 text-gray-500 dark:text-gray-300 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors border border-gray-200 dark:border-gray-700"
+            title="Menu"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+            </svg>
+          </button>
         </div>
       </header>
 
@@ -575,6 +611,80 @@ export default function App() {
             </div>
           </div>
         )}
+
+      {/* Menu Modal */}
+      {isMenuOpen && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in">
+          <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-xl max-w-sm w-full p-6 border border-gray-100 dark:border-gray-800">
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-xl font-bold text-gray-800 dark:text-white">Menu</h2>
+              <button onClick={() => {setIsMenuOpen(false); setResetConfirm(false);}} className="p-1 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg text-gray-500">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              {!resetConfirm ? (
+                <button 
+                  onClick={() => setResetConfirm(true)}
+                  className="w-full p-4 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 font-bold rounded-xl hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors flex items-center justify-center gap-2 border border-red-100 dark:border-red-900/50"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                  </svg>
+                  Ricomincia da Zero
+                </button>
+              ) : (
+                <div className="bg-red-50 dark:bg-red-900/20 p-4 rounded-xl border border-red-100 dark:border-red-900/50">
+                  <p className="text-red-800 dark:text-red-200 font-medium text-center mb-3">Sei sicuro? Perderai tutti i progressi.</p>
+                  <div className="flex gap-2">
+                    <button 
+                      onClick={() => setResetConfirm(false)}
+                      className="flex-1 py-2 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 rounded-lg font-bold shadow-sm hover:bg-gray-50 dark:hover:bg-gray-700"
+                    >
+                      No
+                    </button>
+                    <button 
+                      onClick={handleResetGame}
+                      className="flex-1 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg font-bold shadow-sm"
+                    >
+                      Sì, Cancella
+                    </button>
+                  </div>
+                </div>
+              )}
+              
+              <div className="bg-blue-50 dark:bg-gray-800 p-4 rounded-xl">
+                 <h3 className="font-bold text-gray-700 dark:text-gray-200 mb-2 text-sm uppercase tracking-wide">Statistiche</h3>
+                 <div className="grid grid-cols-2 gap-4 text-sm">
+                    <div>
+                        <p className="text-gray-500 dark:text-gray-400">Livello</p>
+                        <p className="font-bold text-gray-800 dark:text-white capitalize">{gameState.currentDifficulty}</p>
+                    </div>
+                    <div>
+                        <p className="text-gray-500 dark:text-gray-400">Parole Trovate</p>
+                        <p className="font-bold text-gray-800 dark:text-white">{gameState.successCount}</p>
+                    </div>
+                    <div>
+                        <p className="text-gray-500 dark:text-gray-400">Stelle</p>
+                        <p className="font-bold text-yellow-500 flex items-center gap-1">{gameState.totalStars} <span>⭐</span></p>
+                    </div>
+                    <div>
+                        <p className="text-gray-500 dark:text-gray-400">Streak</p>
+                        <p className="font-bold text-orange-500 flex items-center gap-1">{gameState.streak} <span>🔥</span></p>
+                    </div>
+                 </div>
+              </div>
+
+              <div className="text-center text-xs text-gray-400 mt-4">
+                 v1.0.1 • Italian Hangman
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
       </main>
 
       <footer className="mt-8 text-center text-gray-400 dark:text-gray-500 text-sm px-4 pb-4 transition-colors">
