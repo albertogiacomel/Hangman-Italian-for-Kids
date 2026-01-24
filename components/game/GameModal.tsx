@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { GameState, Language } from '../../types/index';
 import { TRANSLATIONS } from '../../translations';
@@ -14,7 +13,6 @@ interface GameModalProps {
 
 export const GameModal: React.FC<GameModalProps> = ({
   gameState,
-  language,
   t,
   isAudioLoading,
   onSpeak,
