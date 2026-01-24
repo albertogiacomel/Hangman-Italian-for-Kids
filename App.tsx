@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { CategoryEmoji, LETTER_NAMES_ITALIAN, Language, Word } from './types';
-import { ITALIAN_ALPHABET, CONFIG } from './constants';
+import { CategoryEmoji, LETTER_NAMES_ITALIAN, Language, Word } from './types/index';
+import { ITALIAN_ALPHABET, CONFIG } from './constants/index';
 import { TRANSLATIONS } from './translations';
 import { HangmanVisual, Keyboard, AdBanner, ProgressBar, GameModal, GameMenu } from './components';
 import { useGameLogic } from './hooks/useGameLogic';

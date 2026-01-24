@@ -1,5 +1,5 @@
 
-import { Language } from './types';
+import { Language } from './types/index';
 
 export const TRANSLATIONS: Record<Language, any> = {
   it: {

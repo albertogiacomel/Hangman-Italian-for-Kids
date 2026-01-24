@@ -1,5 +1,5 @@
 
-import { Word } from '../types';
+import { Word } from '../types/index';
 
 export const ITALIAN_ALPHABET = 'abcdefghilmnopqrstuvz'.split('');
 
@@ -27,4 +27,3 @@ export const INITIAL_WORDS: Word[] = [
   { italian: 'colla', english: 'glue', category: 'school', difficulty: 'hard', hint: 'Attacca i fogli di carta.' },
   { italian: 'forbici', english: 'scissors', category: 'school', difficulty: 'hard', hint: 'Servono per tagliare la carta.' }
 ];
-    

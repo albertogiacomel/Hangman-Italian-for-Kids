@@ -1,5 +1,5 @@
 
-import { Config } from '../types';
+import { Config } from '../types/index';
 
 export const CONFIG: Config = {
   words_per_difficulty_level: 5,
@@ -7,4 +7,3 @@ export const CONFIG: Config = {
   enable_audio: true,
   audio_delay_ms: 2000,
 };
-    

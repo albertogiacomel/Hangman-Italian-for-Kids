@@ -1,7 +1,7 @@
 
 import { useEffect, useCallback, useReducer } from 'react';
-import { GameState, Word, Language } from '../types';
-import { INITIAL_WORDS, CONFIG } from '../constants';
+import { GameState, Word, Language } from '../types/index';
+import { INITIAL_WORDS, CONFIG } from '../constants/index';
 import { TRANSLATIONS } from '../translations';
 import { preloadAudio } from '../services/geminiService';
 import { playClickSound, playWinSound, playLoseSound } from '../services/soundEffects';
@@ -262,4 +262,3 @@ export const useGameLogic = ({ language, sfxEnabled, enableAudio, onGameEnd, onL
 
   return { gameState, selectNewWord, handleLetterGuess, handleHint, resetGame };
 };
-    

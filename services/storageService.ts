@@ -1,5 +1,5 @@
 
-import { GameState, Language } from '../types';
+import { GameState, Language } from '../types/index';
 
 const KEYS = {
   GAME_STATE: 'italianHangmanState',
@@ -53,4 +53,3 @@ export const storageService = {
     return saved !== null ? JSON.parse(saved) : defaultVal;
   }
 };
-    

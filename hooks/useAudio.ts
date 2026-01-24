@@ -1,7 +1,7 @@
 
 import { useState, useCallback } from 'react';
 import { speakWithGemini, speakInstant } from '../services/geminiService';
-import { CONFIG } from '../constants';
+import { CONFIG } from '../constants/index';
 
 export const useAudio = (enabled: boolean) => {
   const [isAudioLoading, setIsAudioLoading] = useState(false);
@@ -25,4 +25,3 @@ export const useAudio = (enabled: boolean) => {
 
   return { speak, isAudioLoading };
 };
-    
