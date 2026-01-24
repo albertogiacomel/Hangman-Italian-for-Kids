@@ -391,21 +391,34 @@ export default function App() {
     }
   }, [selectNewWord, gameState.currentWord]);
 
-  const displayWord = useMemo(() => {
-    if (!gameState.currentWord) return '';
-    return gameState.currentWord.italian.toLowerCase().split('').map(char => 
-      gameState.guessedLetters.includes(char) ? char.toUpperCase() : '_'
-    ).join(' ');
-  }, [gameState.currentWord, gameState.guessedLetters]);
-
   // Determine dynamic font size based on word length
   const wordLen = gameState.currentWord?.italian.length || 0;
+  
+  // Logic updated to handle long words like "ippopotamo" (10 chars) better
+  // We use flex-nowrap now, so we must be very careful with font sizes on small screens.
   let wordFontSizeClass = "text-4xl sm:text-5xl md:text-6xl";
-  if (wordLen > 10) {
-    wordFontSizeClass = "text-lg sm:text-3xl md:text-4xl";
-  } else if (wordLen > 7) {
-    wordFontSizeClass = "text-2xl sm:text-4xl md:text-5xl";
+  let wordContainerGap = "gap-2 sm:gap-3";
+  
+  if (wordLen > 11) {
+    wordFontSizeClass = "text-lg sm:text-2xl md:text-3xl";
+    wordContainerGap = "gap-0.5";
+  } else if (wordLen > 8) {
+    // Covers 9, 10 (ippopotamo), 11
+    // text-xl is ~20px. 10 chars = 200px + gaps. Safe for mobile (320px+)
+    wordFontSizeClass = "text-xl sm:text-3xl md:text-4xl";
+    wordContainerGap = "gap-1";
+  } else if (wordLen > 6) {
+    wordFontSizeClass = "text-3xl sm:text-4xl md:text-5xl";
+    wordContainerGap = "gap-2";
   }
+
+  // Aria label text construction
+  const displayWordAria = useMemo(() => {
+    if (!gameState.currentWord) return '';
+    return gameState.currentWord.italian.toLowerCase().split('').map(char => 
+      gameState.guessedLetters.includes(char) ? char : '_'
+    ).join(' ');
+  }, [gameState.currentWord, gameState.guessedLetters]);
 
   return (
     <div className="min-h-screen bg-blue-50 dark:bg-gray-950 pb-12 font-sans selection:bg-blue-200 dark:selection:bg-blue-800 transition-colors duration-300">
@@ -506,10 +519,14 @@ export default function App() {
               </div>
               
               <div 
-                className={`${wordFontSizeClass} font-mono font-bold tracking-[0.15em] text-gray-800 dark:text-white w-full transition-colors whitespace-nowrap`}
-                aria-label={`Current word: ${displayWord}`}
+                className={`${wordFontSizeClass} font-mono font-bold text-gray-800 dark:text-white w-full transition-colors flex flex-nowrap justify-center ${wordContainerGap}`}
+                aria-label={`Current word: ${displayWordAria}`}
               >
-                {displayWord}
+                {gameState.currentWord?.italian.toLowerCase().split('').map((char, index) => (
+                  <span key={index} className="inline-block">
+                    {gameState.guessedLetters.includes(char) ? char.toUpperCase() : '_'}
+                  </span>
+                ))}
               </div>
 
               <div className="h-12 flex items-center justify-center w-full" aria-live="polite">

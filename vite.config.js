@@ -22,14 +22,12 @@ export default defineConfig(({ mode }) => {
     server: {
       host: '0.0.0.0',
       port: 8080,
-      strictPort: true,
-      allowedHosts: true // Allow all hosts for AI Studio/Cloud environments
+      strictPort: true
     },
     preview: {
       host: '0.0.0.0',
       port: 8080,
-      strictPort: true,
-      allowedHosts: true // Allow all hosts for AI Studio/Cloud environments
+      strictPort: true
     }
   };
 });
