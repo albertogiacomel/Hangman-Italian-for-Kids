@@ -11,7 +11,6 @@ export interface Config {
   words_per_difficulty_level: number;
   max_attempts: number;
   enable_audio: boolean;
-  audio_delay_ms: number;
 }
 
 export type GameStatus = 'new' | 'playing' | 'won' | 'lost';
@@ -56,4 +55,3 @@ export const LETTER_NAMES_ITALIAN: Record<string, string> = {
   i: 'i', l: 'elle', m: 'emme', n: 'enne', o: 'o', p: 'pi', q: 'cu', r: 'erre',
   s: 'esse', t: 'ti', u: 'u', v: 'vu', z: 'zeta'
 };
-    

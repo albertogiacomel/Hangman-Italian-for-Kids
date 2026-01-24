@@ -1,0 +1,1143 @@
+project: "Italian Hangman"
+version: "1.0.0"
+files:
+  - path: "index.tsx"
+    content: |
+      import React from 'react';
+      import { createRoot } from 'react-dom/client';
+      import App from './App';
+
+      const rootElement = document.getElementById('root');
+      if (!rootElement) {
+        throw new Error("Could not find root element to mount to");
+      }
+
+      const root = createRoot(rootElement);
+      root.render(
+        <React.StrictMode>
+          <App />
+        </React.StrictMode>
+      );
+
+  - path: "metadata.json"
+    content: |
+      {
+        "name": "Imparare l'Italiano - Hangman",
+        "description": "An interactive Italian vocabulary game for children with word lists, translations, and audio pronunciations using Gemini TTS.",
+        "requestFramePermissions": []
+      }
+
+  - path: "index.html"
+    content: |
+      <!DOCTYPE html>
+      <html lang="en">
+      <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <meta name="description" content="Italian Hangman - A fun way to learn Italian vocabulary">
+        <title>Italian Hangman</title>
+        <link rel="canonical" href="https://hangman.giacomel.info/" />
+        <script src="https://cdn.tailwindcss.com"></script>
+        <script>
+          tailwind.config = { darkMode: 'class' }
+        </script>
+        <link href="https://fonts.googleapis.com/css2?family=Fredoka+One&family=Quicksand:wght@400;500;700&display=swap" rel="stylesheet">
+        <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-XXXXXXXXXXXXXXXX" crossorigin="anonymous"></script>
+        <style>
+          body { font-family: 'Quicksand', sans-serif; }
+          .font-title { font-family: 'Fredoka One', cursive; }
+          .cursor-wait { cursor: wait; }
+        </style>
+      </head>
+      <body class="bg-blue-50 text-gray-900 dark:bg-gray-950 dark:text-gray-100 transition-colors duration-300">
+        <div id="root"></div>
+        <script type="module" src="/index.tsx"></script>
+      </body>
+      </html>
+
+  - path: "types.ts"
+    content: |
+      export interface Word {
+        italian: string;
+        english: string;
+        category: string;
+        difficulty: 'easy' | 'medium' | 'hard';
+        hint?: string;
+      }
+
+      export interface Config {
+        words_per_difficulty_level: number;
+        max_attempts: number;
+        enable_audio: boolean;
+      }
+
+      export type GameStatus = 'new' | 'playing' | 'won' | 'lost';
+      export type Language = 'it' | 'en';
+
+      export interface GameState {
+        currentWord: Word | null;
+        currentDifficulty: 'easy' | 'medium' | 'hard';
+        wordsCompleted: number;
+        successCount: number;
+        guessedLetters: string[];
+        attemptsRemaining: number;
+        gameStatus: GameStatus;
+        wordsAttempted: string[];
+        difficultyProgress: { easy: number; medium: number; hard: number };
+        feedback: string;
+        streak: number;
+        totalStars: number;
+        hintsUsed: number; // 0 = none, 1 = text hint, 2 = letter reveal
+      }
+
+      export enum CategoryEmoji {
+        animals = '🐾',
+        colors = '🎨',
+        objects = '🏠',
+        food = '🍎',
+        people = '👨‍👩‍👧‍👦',
+        verbs = '🏃',
+        numbers = '🔢',
+        time = '📅',
+        body = '🦵',
+        emotions = '😎',
+        weather = '⛈️',
+        nature = '🌲',
+        clothing = '👕',
+        transport = '🚀',
+        school = '🎒',
+      }
+
+      export const LETTER_NAMES_ITALIAN: Record<string, string> = {
+        a: 'a', b: 'bi', c: 'ci', d: 'di', e: 'e', f: 'effe', g: 'gi', h: 'acca',
+        i: 'i', l: 'elle', m: 'emme', n: 'enne', o: 'o', p: 'pi', q: 'cu', r: 'erre',
+        s: 'esse', t: 'ti', u: 'u', v: 'vu', z: 'zeta'
+      };
+
+  - path: "constants.ts"
+    content: |
+      import { Word, Config } from './types';
+
+      export const CONFIG: Config = {
+        words_per_difficulty_level: 5,
+        max_attempts: 6,
+        enable_audio: true,
+      };
+
+      export const INITIAL_WORDS: Word[] = [
+        { italian: 'gatto', english: 'cat', category: 'animals', difficulty: 'easy', hint: 'Fa le fusa e dice miao.' },
+        // ... (Truncated for brevity in YAML output, assuming full list exists in source)
+      ];
+
+      export const ITALIAN_ALPHABET = 'abcdefghilmnopqrstuvz'.split('');
+
+  - path: "services/geminiService.ts"
+    content: |
+      import { GoogleGenAI, Modality } from "@google/genai";
+
+      const decode = (base64: string) => {
+        const binaryString = atob(base64);
+        const len = binaryString.length;
+        const bytes = new Uint8Array(len);
+        for (let i = 0; i < len; i++) {
+          bytes[i] = binaryString.charCodeAt(i);
+        }
+        return bytes;
+      };
+
+      const decodeAudioData = async (
+        data: Uint8Array | ArrayBuffer,
+        ctx: AudioContext,
+        sampleRate: number,
+        numChannels: number,
+      ): Promise<AudioBuffer> => {
+        const bufferToDecode = data instanceof Uint8Array ? data.buffer : data;
+        const dataInt16 = new Int16Array(bufferToDecode);
+        const frameCount = dataInt16.length / numChannels;
+        const buffer = ctx.createBuffer(numChannels, frameCount, sampleRate);
+
+        for (let channel = 0; channel < numChannels; channel++) {
+          const channelData = buffer.getChannelData(channel);
+          for (let i = 0; i < frameCount; i++) {
+            channelData[i] = dataInt16[i * numChannels + channel] / 32768.0;
+          }
+        }
+        return buffer;
+      };
+
+      const DB_NAME = 'hangman_audio_db';
+      const STORE_NAME = 'audio_files';
+      const DB_VERSION = 1;
+
+      const openDB = (): Promise<IDBDatabase> => {
+        return new Promise((resolve, reject) => {
+          const request = indexedDB.open(DB_NAME, DB_VERSION);
+          request.onupgradeneeded = (event) => {
+            const db = (event.target as IDBOpenDBRequest).result;
+            if (!db.objectStoreNames.contains(STORE_NAME)) {
+              db.createObjectStore(STORE_NAME);
+            }
+          };
+          request.onsuccess = () => resolve(request.result);
+          request.onerror = () => reject(request.error);
+        });
+      };
+
+      const getAudioFromDB = async (key: string): Promise<ArrayBuffer | undefined> => {
+        try {
+          const db = await openDB();
+          return new Promise((resolve, reject) => {
+            const transaction = db.transaction(STORE_NAME, 'readonly');
+            const store = transaction.objectStore(STORE_NAME);
+            const request = store.get(key);
+            request.onsuccess = () => resolve(request.result);
+            request.onerror = () => reject(request.error);
+          });
+        } catch (e) {
+          console.warn("DB Read Error", e);
+          return undefined;
+        }
+      };
+
+      const saveAudioToDB = async (key: string, data: ArrayBuffer) => {
+        try {
+          const db = await openDB();
+          const transaction = db.transaction(STORE_NAME, 'readwrite');
+          const store = transaction.objectStore(STORE_NAME);
+          store.put(data, key);
+        } catch (e) {
+          console.warn("DB Write Error", e);
+        }
+      };
+
+      let sharedAudioCtx: AudioContext | null = null;
+      const memoryCache = new Map<string, AudioBuffer>();
+
+      const getAudioContext = () => {
+        if (!sharedAudioCtx) {
+          sharedAudioCtx = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
+        }
+        return sharedAudioCtx;
+      };
+
+      const ensureAudioLoaded = async (text: string, language: 'it' | 'en'): Promise<AudioBuffer | null> => {
+        if (language === 'en') return null;
+
+        const apiKey = process.env.API_KEY;
+        if (!apiKey) return null;
+
+        const ctx = getAudioContext();
+        const cacheKey = `${language}:${text.toLowerCase()}`;
+
+        if (memoryCache.has(cacheKey)) {
+          return memoryCache.get(cacheKey)!;
+        }
+
+        const cachedArrayBuffer = await getAudioFromDB(cacheKey);
+        if (cachedArrayBuffer) {
+          const audioBuffer = await decodeAudioData(cachedArrayBuffer, ctx, 24000, 1);
+          memoryCache.set(cacheKey, audioBuffer);
+          return audioBuffer;
+        }
+
+        const ai = new GoogleGenAI({ apiKey });
+        const prompt = `Dì con voce molto chiara e amichevole: ${text}`;
+        const voiceName = 'Kore';
+
+        try {
+          const response = await ai.models.generateContent({
+            model: "gemini-2.5-flash-preview-tts",
+            contents: [{ parts: [{ text: prompt }] }],
+            config: {
+              responseModalities: [Modality.AUDIO],
+              speechConfig: {
+                voiceConfig: {
+                  prebuiltVoiceConfig: { voiceName },
+                },
+              },
+            },
+          });
+
+          const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+          if (base64Audio) {
+            const rawBytes = decode(base64Audio);
+            saveAudioToDB(cacheKey, rawBytes.buffer);
+            const audioBuffer = await decodeAudioData(rawBytes, ctx, 24000, 1);
+            memoryCache.set(cacheKey, audioBuffer);
+            return audioBuffer;
+          }
+        } catch (error) {
+          console.error("Gemini TTS Preload/Fetch Error:", error);
+        }
+        return null;
+      };
+
+      export const preloadAudio = async (text: string, language: 'it' | 'en' = 'it') => {
+        await ensureAudioLoaded(text, language);
+      };
+
+      export const speakWithGemini = async (text: string, language: 'it' | 'en' = 'it') => {
+        if (language === 'en') {
+          speakInstant(text, language);
+          return;
+        }
+
+        const ctx = getAudioContext();
+        if (ctx.state === 'suspended') {
+          await ctx.resume();
+        }
+
+        try {
+          const audioBuffer = await ensureAudioLoaded(text, language);
+          if (audioBuffer) {
+            playBuffer(audioBuffer, ctx);
+          } else {
+            speakInstant(text, language);
+          }
+        } catch (e) {
+          console.error("Playback error", e);
+          speakInstant(text, language);
+        }
+      };
+
+      const playBuffer = (buffer: AudioBuffer, ctx: AudioContext) => {
+        const source = ctx.createBufferSource();
+        source.buffer = buffer;
+        source.connect(ctx.destination);
+        source.start();
+      };
+
+      export const speakInstant = (text: string, language: 'it' | 'en' = 'it') => {
+        const utter = new SpeechSynthesisUtterance(text);
+        utter.lang = language === 'it' ? 'it-IT' : 'en-US';
+        
+        const voices = window.speechSynthesis.getVoices();
+        const preferredVoice = voices.find(v => 
+          v.lang.startsWith(language === 'it' ? 'it' : 'en') && 
+          (v.name.includes('Google') || v.name.includes('Premium'))
+        );
+        if (preferredVoice) utter.voice = preferredVoice;
+
+        utter.rate = 0.9;
+        window.speechSynthesis.cancel(); 
+        window.speechSynthesis.speak(utter);
+      };
+
+  - path: "components/HangmanVisual.tsx"
+    content: |
+      import React from 'react';
+
+      interface HangmanVisualProps {
+        wrongGuesses: number;
+      }
+
+      export const HangmanVisual: React.FC<HangmanVisualProps> = ({ wrongGuesses }) => {
+        const parts = [
+          <circle key="head" cx="150" cy="70" r="22" className="stroke-gray-700 dark:stroke-white" strokeWidth="4" fill="white" />,
+          <line key="body" x1="150" y1="92" x2="150" y2="150" className="stroke-gray-700 dark:stroke-white" strokeWidth="4" />,
+          <line key="leftarm" x1="150" y1="110" x2="120" y2="130" className="stroke-gray-700 dark:stroke-white" strokeWidth="4" strokeLinecap="round" />,
+          <line key="rightarm" x1="150" y1="110" x2="180" y2="130" className="stroke-gray-700 dark:stroke-white" strokeWidth="4" strokeLinecap="round" />,
+          <line key="leftleg" x1="150" y1="150" x2="125" y2="185" className="stroke-gray-700 dark:stroke-white" strokeWidth="4" strokeLinecap="round" />,
+          <line key="rightleg" x1="150" y1="150" x2="175" y2="185" className="stroke-gray-700 dark:stroke-white" strokeWidth="4" strokeLinecap="round" />,
+        ];
+
+        return (
+          <div className="relative w-full flex justify-center py-4">
+            <svg width="240" height="240" viewBox="0 0 200 200" className="drop-shadow-sm">
+              <line x1="20" y1="190" x2="180" y2="190" className="stroke-gray-400 dark:stroke-gray-500" strokeWidth="6" strokeLinecap="round" />
+              <line x1="50" y1="190" x2="50" y2="10" className="stroke-gray-400 dark:stroke-gray-500" strokeWidth="6" strokeLinecap="round" />
+              <line x1="50" y1="10" x2="150" y2="10" className="stroke-gray-400 dark:stroke-gray-500" strokeWidth="6" strokeLinecap="round" />
+              <line x1="150" y1="10" x2="150" y2="48" className="stroke-gray-400 dark:stroke-gray-500" strokeWidth="6" strokeLinecap="round" />
+              {parts.slice(0, wrongGuesses)}
+            </svg>
+          </div>
+        );
+      };
+
+  - path: "components/Keyboard.tsx"
+    content: |
+      import React from 'react';
+      import { ITALIAN_ALPHABET } from '../constants';
+
+      interface KeyboardProps {
+        guessedLetters: string[];
+        onLetterGuess: (letter: string) => void;
+        disabled?: boolean;
+      }
+
+      export const Keyboard: React.FC<KeyboardProps> = ({ guessedLetters, onLetterGuess, disabled }) => {
+        return (
+          <div className="grid grid-cols-7 sm:grid-cols-11 gap-2 max-w-2xl mx-auto px-4" role="group" aria-label="Virtual Keyboard">
+            {ITALIAN_ALPHABET.map((letter) => {
+              const isUsed = guessedLetters.includes(letter);
+              return (
+                <button
+                  key={letter}
+                  onClick={() => onLetterGuess(letter)}
+                  disabled={isUsed || disabled}
+                  aria-label={`Letter ${letter.toUpperCase()}`}
+                  aria-disabled={isUsed || disabled}
+                  className={`
+                    h-12 w-full flex items-center justify-center rounded-xl text-lg font-bold transition-all duration-200 outline-none
+                    focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 dark:focus:ring-offset-gray-900
+                    ${isUsed 
+                      ? 'bg-gray-200 dark:bg-gray-800 text-gray-400 dark:text-gray-600 cursor-not-allowed transform scale-95 border border-transparent' 
+                      : 'bg-white dark:bg-gray-800 text-blue-600 dark:text-blue-200 shadow-md hover:bg-blue-50 dark:hover:bg-gray-700 active:translate-y-1 hover:shadow-lg border-b-4 border-blue-200 dark:border-gray-950 active:border-b-0'
+                    }
+                  `}
+                >
+                  {letter.toUpperCase()}
+                </button>
+              );
+            })}
+          </div>
+        );
+      };
+
+  - path: "App.tsx"
+    content: |
+      import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+      import { GameState, CategoryEmoji, LETTER_NAMES_ITALIAN, Language } from './types';
+      import { INITIAL_WORDS, ITALIAN_ALPHABET, CONFIG } from './constants';
+      import { TRANSLATIONS } from './translations';
+      import { HangmanVisual } from './components/HangmanVisual';
+      import { Keyboard } from './components/Keyboard';
+      import { AdBanner } from './components/AdBanner';
+      import { ProgressBar } from './components/ProgressBar';
+      import { speakWithGemini, speakInstant, preloadAudio } from './services/geminiService';
+      import { playClickSound, playWinSound, playLoseSound } from './services/soundEffects';
+
+      export default function App() {
+        const [language, setLanguage] = useState<Language>(() => {
+          const saved = localStorage.getItem('appLanguage');
+          return (saved === 'it' || saved === 'en') ? saved : 'it';
+        });
+
+        const t = TRANSLATIONS[language];
+        const changeLanguage = (lang: Language) => {
+          setLanguage(lang);
+          localStorage.setItem('appLanguage', lang);
+        };
+
+        const [theme, setTheme] = useState(() => {
+          if (localStorage.getItem('theme')) return localStorage.getItem('theme') as 'light' | 'dark';
+          return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+        });
+
+        useEffect(() => {
+          const root = window.document.documentElement;
+          if (theme === 'dark') root.classList.add('dark');
+          else root.classList.remove('dark');
+          localStorage.setItem('theme', theme);
+        }, [theme]);
+
+        const toggleTheme = () => setTheme(prev => prev === 'light' ? 'dark' : 'light');
+
+        const [sfxEnabled, setSfxEnabled] = useState(() => {
+          const saved = localStorage.getItem('sfxEnabled');
+          return saved !== null ? JSON.parse(saved) : true;
+        });
+
+        const toggleSfx = () => {
+          setSfxEnabled((prev: boolean) => {
+            const newValue = !prev;
+            localStorage.setItem('sfxEnabled', JSON.stringify(newValue));
+            return newValue;
+          });
+        };
+
+        const [isMenuOpen, setIsMenuOpen] = useState(false);
+        const [resetConfirm, setResetConfirm] = useState(false);
+        const [isAudioLoading, setIsAudioLoading] = useState(false);
+
+        const getInitialState = (): GameState => {
+          try {
+            const saved = localStorage.getItem('italianHangmanState');
+            if (saved) {
+              const parsed = JSON.parse(saved);
+              return {
+                currentWord: null,
+                currentDifficulty: parsed.currentDifficulty || 'easy',
+                wordsCompleted: parsed.wordsCompleted || 0,
+                successCount: parsed.successCount || 0,
+                guessedLetters: [],
+                attemptsRemaining: CONFIG.max_attempts,
+                gameStatus: 'new',
+                wordsAttempted: parsed.wordsAttempted || [],
+                difficultyProgress: parsed.difficultyProgress || { easy: 0, medium: 0, hard: 0 },
+                feedback: '',
+                streak: parsed.streak || 0,
+                totalStars: parsed.totalStars || 0,
+                hintsUsed: 0
+              };
+            }
+          } catch (e) { console.error("Failed to load save state", e); }
+          return {
+            currentWord: null,
+            currentDifficulty: 'easy',
+            wordsCompleted: 0,
+            successCount: 0,
+            guessedLetters: [],
+            attemptsRemaining: CONFIG.max_attempts,
+            gameStatus: 'new',
+            wordsAttempted: [],
+            difficultyProgress: { easy: 0, medium: 0, hard: 0 },
+            feedback: '',
+            streak: 0,
+            totalStars: 0,
+            hintsUsed: 0
+          };
+        };
+
+        const [gameState, setGameState] = useState<GameState>(getInitialState);
+        const [isFullScreen, setIsFullScreen] = useState(false);
+        const stateRef = useRef(gameState);
+        
+        useEffect(() => {
+          stateRef.current = gameState;
+          localStorage.setItem('italianHangmanState', JSON.stringify({
+            currentDifficulty: gameState.currentDifficulty,
+            wordsCompleted: gameState.wordsCompleted,
+            successCount: gameState.successCount,
+            wordsAttempted: gameState.wordsAttempted,
+            difficultyProgress: gameState.difficultyProgress,
+            streak: gameState.streak,
+            totalStars: gameState.totalStars
+          }));
+        }, [gameState]);
+
+        const toggleFullScreen = () => {
+          if (!document.fullscreenElement) {
+            document.documentElement.requestFullscreen().catch(e => console.error(e));
+            setIsFullScreen(true);
+          } else if (document.exitFullscreen) {
+            document.exitFullscreen();
+            setIsFullScreen(false);
+          }
+        };
+
+        const handleResetGame = () => {
+          localStorage.removeItem('italianHangmanState');
+          setGameState({
+            currentWord: null,
+            currentDifficulty: 'easy',
+            wordsCompleted: 0,
+            successCount: 0,
+            guessedLetters: [],
+            attemptsRemaining: CONFIG.max_attempts,
+            gameStatus: 'new',
+            wordsAttempted: [],
+            difficultyProgress: { easy: 0, medium: 0, hard: 0 },
+            feedback: '',
+            streak: 0,
+            totalStars: 0,
+            hintsUsed: 0
+          });
+          setResetConfirm(false);
+          setIsMenuOpen(false);
+        };
+
+        useEffect(() => {
+          const handler = () => setIsFullScreen(!!document.fullscreenElement);
+          document.addEventListener('fullscreenchange', handler);
+          return () => document.removeEventListener('fullscreenchange', handler);
+        }, []);
+
+        const handleSpeak = async (text: string, lang: 'it' | 'en') => {
+          if (CONFIG.enable_audio) {
+            setIsAudioLoading(true);
+            try {
+              if (lang === 'it') await speakWithGemini(text, lang);
+              else speakInstant(text, lang);
+            } finally {
+              setIsAudioLoading(false);
+            }
+          }
+        };
+
+        const selectNewWord = useCallback(() => {
+          let availableWords = INITIAL_WORDS.filter(
+            (w) => w.difficulty === stateRef.current.currentDifficulty && !stateRef.current.wordsAttempted.includes(w.italian)
+          );
+
+          if (availableWords.length === 0) {
+            let nextDiff = stateRef.current.currentDifficulty;
+            if (nextDiff === 'easy') nextDiff = 'medium';
+            else if (nextDiff === 'medium') nextDiff = 'hard';
+            else nextDiff = 'easy';
+
+            const nextWords = INITIAL_WORDS.filter((w) => w.difficulty === nextDiff);
+            const attemptedInNext = stateRef.current.wordsAttempted; 
+            availableWords = nextWords.filter(w => !attemptedInNext.includes(w.italian));
+            if (availableWords.length === 0) availableWords = nextWords;
+            setGameState(prev => ({ ...prev, currentDifficulty: nextDiff }));
+          }
+
+          const selectedWord = availableWords[Math.floor(Math.random() * availableWords.length)];
+          if (CONFIG.enable_audio && selectedWord) preloadAudio(selectedWord.italian, 'it');
+
+          setGameState((prev) => ({
+            ...prev,
+            currentWord: selectedWord,
+            guessedLetters: [],
+            attemptsRemaining: CONFIG.max_attempts,
+            gameStatus: 'playing',
+            feedback: '',
+            hintsUsed: 0
+          }));
+        }, []);
+
+        const handleHint = () => {
+          const state = stateRef.current;
+          if (!state.currentWord || state.gameStatus !== 'playing' || state.hintsUsed >= 2) return;
+          if (sfxEnabled) playClickSound();
+
+          const newHintLevel = state.hintsUsed + 1;
+          let feedbackMsg = '';
+          let newGuessedLetters = [...state.guessedLetters];
+          const currentT = TRANSLATIONS[language]; 
+
+          if (newHintLevel === 1) {
+            const categoryName = currentT.categories[state.currentWord.category] || state.currentWord.category;
+            feedbackMsg = language === 'it' 
+              ? (state.currentWord.hint || `${currentT.hint_intro_generic} ${categoryName}...`)
+              : `${currentT.hint_intro_generic} ${categoryName}...`;
+          } else if (newHintLevel === 2) {
+            const targetWord = state.currentWord.italian.toLowerCase();
+            const unrevealedConsonants = targetWord.split('').filter(char => 
+              !state.guessedLetters.includes(char) && ITALIAN_ALPHABET.includes(char) && !'aeiou'.includes(char)
+            );
+            if (unrevealedConsonants.length > 0) {
+              const randomConsonant = unrevealedConsonants[Math.floor(Math.random() * unrevealedConsonants.length)];
+              newGuessedLetters.push(randomConsonant);
+              feedbackMsg = `${currentT.hint_intro_letter}: ${randomConsonant.toUpperCase()}`;
+              const allLettersGuessed = targetWord.split('').every((char) => newGuessedLetters.includes(char) || char === ' ' || char === '-');
+              if (allLettersGuessed) { handleGameWin(newGuessedLetters); return; }
+            } else {
+              feedbackMsg = currentT.hint_no_consonants;
+            }
+          }
+          setGameState(prev => ({ ...prev, hintsUsed: newHintLevel, guessedLetters: newGuessedLetters, feedback: feedbackMsg }));
+        };
+
+        const handleGameWin = (finalGuessedLetters: string[]) => {
+          const state = stateRef.current;
+          const currentT = TRANSLATIONS[language];
+          if (sfxEnabled) playWinSound();
+
+          const errors = CONFIG.max_attempts - state.attemptsRemaining;
+          let starsEarned = errors === 0 ? 3 : errors <= 2 ? 2 : 1;
+          const newDiffProgress = { ...state.difficultyProgress };
+          newDiffProgress[state.currentDifficulty] += 1;
+
+          let nextDifficulty = state.currentDifficulty;
+          if (newDiffProgress[state.currentDifficulty] >= CONFIG.words_per_difficulty_level) {
+            if (state.currentDifficulty === 'easy') nextDifficulty = 'medium';
+            else if (state.currentDifficulty === 'medium') nextDifficulty = 'hard';
+          }
+
+          setGameState(prev => ({
+            ...prev,
+            guessedLetters: finalGuessedLetters,
+            gameStatus: 'won',
+            successCount: prev.successCount + 1,
+            wordsCompleted: prev.wordsCompleted + 1,
+            wordsAttempted: [...prev.wordsAttempted, prev.currentWord!.italian],
+            difficultyProgress: newDiffProgress,
+            currentDifficulty: nextDifficulty,
+            feedback: `${currentT.win_msg} 🎉`,
+            streak: prev.streak + 1,
+            totalStars: prev.totalStars + starsEarned
+          }));
+
+          if (CONFIG.enable_audio && state.currentWord) {
+            handleSpeak(state.currentWord.italian, 'it');
+            setTimeout(() => handleSpeak(state.currentWord!.english, 'en'), 3000);
+          }
+        };
+
+        const handleLetterGuess = useCallback((letter: string) => {
+          const state = stateRef.current;
+          if (!state.currentWord || state.gameStatus !== 'playing' || state.guessedLetters.includes(letter)) return;
+          if (sfxEnabled) playClickSound();
+          if (CONFIG.enable_audio) speakInstant(LETTER_NAMES_ITALIAN[letter] || letter, 'it');
+
+          const newGuessedLetters = [...state.guessedLetters, letter];
+          const targetWord = state.currentWord.italian.toLowerCase();
+          const isCorrect = targetWord.includes(letter);
+          let nextAttempts = state.attemptsRemaining - (isCorrect ? 0 : 1);
+
+          const allLettersGuessed = targetWord.split('').every((char) => newGuessedLetters.includes(char) || char === ' ' || char === '-');
+
+          if (allLettersGuessed) {
+            handleGameWin(newGuessedLetters);
+          } else if (nextAttempts <= 0) {
+            if (sfxEnabled) playLoseSound();
+            setGameState(prev => ({
+              ...prev,
+              guessedLetters: newGuessedLetters,
+              attemptsRemaining: 0,
+              gameStatus: 'lost',
+              wordsCompleted: prev.wordsCompleted + 1,
+              wordsAttempted: [...prev.wordsAttempted, prev.currentWord!.italian],
+              feedback: TRANSLATIONS[language].feedback_try_again,
+              streak: 0
+            }));
+            if (CONFIG.enable_audio) {
+              handleSpeak(state.currentWord.italian, 'it');
+              setTimeout(() => handleSpeak(state.currentWord!.english, 'en'), 3000);
+            }
+          } else {
+            setGameState(prev => ({
+              ...prev,
+              guessedLetters: newGuessedLetters,
+              attemptsRemaining: nextAttempts,
+              feedback: isCorrect ? TRANSLATIONS[language].feedback_good : TRANSLATIONS[language].feedback_bad
+            }));
+          }
+        }, [language, sfxEnabled]);
+
+        useEffect(() => {
+          const handleKeyDown = (e: KeyboardEvent) => {
+            if (e.ctrlKey || e.altKey || e.metaKey) return;
+            const key = e.key.toLowerCase();
+            if (ITALIAN_ALPHABET.includes(key)) handleLetterGuess(key);
+          };
+          window.addEventListener('keydown', handleKeyDown);
+          return () => window.removeEventListener('keydown', handleKeyDown);
+        }, [handleLetterGuess]);
+
+        useEffect(() => {
+          if (!gameState.currentWord) selectNewWord();
+        }, [selectNewWord, gameState.currentWord]);
+
+        const wordLen = gameState.currentWord?.italian.length || 0;
+        let wordFontSizeClass = "text-4xl sm:text-5xl md:text-6xl";
+        let wordContainerGap = "gap-2 sm:gap-3";
+        if (wordLen > 11) { wordFontSizeClass = "text-lg sm:text-2xl md:text-3xl"; wordContainerGap = "gap-0.5"; } 
+        else if (wordLen > 8) { wordFontSizeClass = "text-xl sm:text-3xl md:text-4xl"; wordContainerGap = "gap-1"; } 
+        else if (wordLen > 6) { wordFontSizeClass = "text-3xl sm:text-4xl md:text-5xl"; wordContainerGap = "gap-2"; }
+
+        const displayWordAria = useMemo(() => {
+          if (!gameState.currentWord) return '';
+          return gameState.currentWord.italian.toLowerCase().split('').map(char => 
+            gameState.guessedLetters.includes(char) ? char : '_'
+          ).join(' ');
+        }, [gameState.currentWord, gameState.guessedLetters]);
+
+        return (
+          <div className="min-h-screen bg-blue-50 dark:bg-gray-950 pb-12 font-sans selection:bg-blue-200 dark:selection:bg-blue-800 transition-colors duration-300">
+            <header className="bg-white dark:bg-gray-900 border-b dark:border-gray-800 shadow-sm sticky top-0 z-20 px-4 py-3 sm:px-6 sm:py-4 flex flex-wrap items-center justify-between gap-y-2 transition-colors duration-300">
+              <div className="flex items-center gap-2">
+                <div className="bg-blue-600 dark:bg-blue-700 text-white p-2 rounded-lg shadow-sm"><span className="text-xl">🇮🇹</span></div>
+                <div>
+                  <h1 className="text-xl sm:text-2xl font-title text-blue-800 dark:text-blue-400 leading-none">Hangman</h1>
+                  <p className="text-xs text-blue-400 dark:text-blue-300 font-bold tracking-wider uppercase">{t.subtitle}</p>
+                </div>
+              </div>
+              <nav className="flex flex-wrap gap-2 sm:gap-4 items-center ml-auto">
+                <div className="hidden sm:flex items-center gap-1 bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-300 px-3 py-1.5 rounded-full border border-orange-200 dark:border-orange-800 shadow-sm">
+                  <span className="text-lg">🔥</span><span className="font-bold text-sm">{gameState.streak}</span>
+                </div>
+                <div className="flex items-center gap-1 bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300 px-3 py-1.5 rounded-full border border-yellow-200 dark:border-yellow-800 shadow-sm">
+                  <span className="text-lg">⭐</span><span className="font-bold text-sm">{gameState.totalStars}</span>
+                </div>
+                <button onClick={toggleTheme} className="p-2 bg-gray-50 dark:bg-gray-800 text-gray-500 dark:text-gray-300 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors border border-gray-200 dark:border-gray-700">
+                  {theme === 'light' ? '🌙' : '☀️'}
+                </button>
+                <button onClick={toggleFullScreen} className="p-2 bg-gray-50 dark:bg-gray-800 text-gray-500 dark:text-gray-300 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors border border-gray-200 dark:border-gray-700">
+                  {isFullScreen ? '↙️' : '↗️'}
+                </button>
+                <button onClick={() => setIsMenuOpen(true)} className="p-2 bg-gray-50 dark:bg-gray-800 text-gray-500 dark:text-gray-300 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors border border-gray-200 dark:border-gray-700">
+                  ☰
+                </button>
+              </nav>
+            </header>
+            <main className="max-w-4xl mx-auto mt-6 sm:mt-8 px-4">
+              <div className="mb-6 bg-white dark:bg-gray-900 p-4 rounded-2xl shadow-sm border border-blue-50 dark:border-gray-800 transition-colors duration-300">
+                <ProgressBar current={gameState.difficultyProgress[gameState.currentDifficulty] % CONFIG.words_per_difficulty_level} max={CONFIG.words_per_difficulty_level} label={`${t.level} ${gameState.currentDifficulty}`} />
+              </div>
+              <div className="bg-white dark:bg-gray-900 rounded-3xl shadow-xl overflow-hidden border-4 border-blue-100 dark:border-gray-800 p-6 md:p-10 text-center relative transition-colors duration-300">
+                <div className="flex flex-col md:flex-row items-center justify-center gap-8">
+                  <div className="w-full md:w-1/3 flex justify-center"><HangmanVisual wrongGuesses={CONFIG.max_attempts - gameState.attemptsRemaining} /></div>
+                  <div className="w-full md:w-2/3 flex flex-col items-center gap-4">
+                    <div className="flex items-center gap-2 px-4 py-2 bg-gray-50 dark:bg-gray-800 rounded-full border border-gray-100 dark:border-gray-700 text-gray-500 dark:text-gray-300 uppercase tracking-widest text-xs font-bold transition-colors">
+                      <span className="text-lg">{CategoryEmoji[gameState.currentWord?.category as keyof typeof CategoryEmoji] || '🏷️'}</span>
+                      <span>{t.categories[gameState.currentWord?.category || ''] || gameState.currentWord?.category}</span>
+                    </div>
+                    <div className={`${wordFontSizeClass} font-mono font-bold text-gray-800 dark:text-white w-full transition-colors flex flex-nowrap justify-center ${wordContainerGap}`}>
+                      {gameState.currentWord?.italian.toLowerCase().split('').map((char, index) => (
+                        <span key={index} className="inline-block">{gameState.guessedLetters.includes(char) ? char.toUpperCase() : '_'}</span>
+                      ))}
+                    </div>
+                    <div className="h-12 flex items-center justify-center w-full">
+                      <div className={`text-lg sm:text-xl font-bold transition-all px-4 py-1 rounded-lg ${gameState.feedback.includes('Bravissimo') ? 'text-green-600 bg-green-50' : 'text-blue-600 bg-blue-50'}`}>{gameState.feedback}</div>
+                    </div>
+                    <button onClick={handleHint} disabled={gameState.hintsUsed >= 2 || gameState.gameStatus !== 'playing'} className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold bg-yellow-100 text-yellow-700 hover:bg-yellow-200">
+                      💡 {gameState.hintsUsed === 0 ? t.hint_btn : gameState.hintsUsed === 1 ? t.hint_btn_more : t.hint_btn_none}
+                    </button>
+                  </div>
+                </div>
+                <div className="mt-8 sm:mt-10"><Keyboard guessedLetters={gameState.guessedLetters} onLetterGuess={handleLetterGuess} disabled={gameState.gameStatus !== 'playing'} /></div>
+                <div className="mt-8 flex justify-center gap-4 text-gray-600 dark:text-gray-400 font-medium text-sm">
+                  {t.attempts}: <div className="flex gap-1">{[...Array(gameState.attemptsRemaining)].map((_, i) => <span key={i} className="text-red-500">❤️</span>)}</div>
+                </div>
+              </div>
+              <AdBanner label={t.ad_label} />
+              {(gameState.gameStatus === 'won' || gameState.gameStatus === 'lost') && (
+                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+                  <div className="bg-white dark:bg-gray-900 rounded-3xl p-6 sm:p-8 max-w-sm w-full text-center shadow-2xl relative overflow-hidden">
+                    <div className="text-7xl mb-4">{gameState.gameStatus === 'won' ? '🏆' : '😿'}</div>
+                    <h2 className="text-4xl font-title mb-2">{gameState.gameStatus === 'won' ? t.win_title : t.lose_title}</h2>
+                    <div className="bg-blue-50 dark:bg-gray-800 rounded-2xl p-4 my-6">
+                      <div className="text-3xl font-bold text-gray-800 dark:text-white mb-3 uppercase">{gameState.currentWord?.italian}</div>
+                      <div className="text-xl font-medium text-blue-700 dark:text-blue-300 capitalize">{gameState.currentWord?.english}</div>
+                    </div>
+                    <button onClick={selectNewWord} className="w-full bg-blue-600 text-white font-bold py-4 rounded-xl shadow-lg">{t.next_word} 🚀</button>
+                  </div>
+                </div>
+              )}
+              {isMenuOpen && (
+                <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                  <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-xl max-w-sm w-full p-6">
+                    <div className="flex justify-between items-center mb-6"><h2 className="text-xl font-bold">{t.menu}</h2><button onClick={() => setIsMenuOpen(false)}>✕</button></div>
+                    <div className="space-y-4">
+                      <div className="grid grid-cols-2 gap-2"><button onClick={() => changeLanguage('it')}>🇮🇹 {t.italian_label}</button><button onClick={() => changeLanguage('en')}>🇬🇧 {t.english_label}</button></div>
+                      <div className="flex justify-between items-center bg-gray-100 p-3 rounded-xl"><span>{t.sfx_label}</span><button onClick={toggleSfx}>{sfxEnabled ? 'ON' : 'OFF'}</button></div>
+                      <button onClick={handleResetGame} className="w-full p-4 bg-red-50 text-red-600 rounded-xl font-bold">{t.reset_btn}</button>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </main>
+            <footer className="mt-8 text-center text-gray-400 text-sm"><p>{t.keyboard_msg}</p><p>{t.slogan}</p></footer>
+          </div>
+        );
+      }
+
+  - path: "components/AdBanner.tsx"
+    content: |
+      import React, { useEffect } from 'react';
+
+      interface AdBannerProps {
+        slot?: string;
+        label?: string;
+      }
+
+      export const AdBanner: React.FC<AdBannerProps> = ({ slot = "1234567890", label = "Annuncio pubblicitario" }) => {
+        useEffect(() => {
+          try { (window as any).adsbygoogle = (window as any).adsbygoogle || []; (window as any).adsbygoogle.push({}); } 
+          catch (e) { console.error("Adsbygoogle error:", e); }
+        }, []);
+
+        return (
+          <div className="my-8 w-full flex flex-col items-center">
+            <span className="text-[10px] text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-1">{label}</span>
+            <div className="bg-gray-100 dark:bg-gray-800 border border-dashed border-gray-300 dark:border-gray-700 rounded-lg flex items-center justify-center overflow-hidden min-h-[100px] w-full max-w-[728px] transition-colors">
+              <ins className="adsbygoogle" style={{ display: 'block', width: '100%' }} data-ad-client="ca-pub-XXXXXXXXXXXXXXXX" data-ad-slot={slot} data-ad-format="auto" data-full-width-responsive="true"></ins>
+              <div className="absolute text-gray-300 dark:text-gray-600 text-sm font-medium pointer-events-none">Google Ads</div>
+            </div>
+          </div>
+        );
+      };
+
+  - path: "package.json"
+    content: |
+      {
+        "name": "italian-hangman",
+        "private": true,
+        "version": "1.0.0",
+        "type": "module",
+        "scripts": {
+          "dev": "vite",
+          "start": "vite build && vite preview --port 8080 --host 0.0.0.0",
+          "build": "vite build",
+          "preview": "vite preview --port 8080 --host 0.0.0.0"
+        },
+        "dependencies": {
+          "react": "^19.0.0",
+          "react-dom": "^19.0.0",
+          "@google/genai": "*",
+          "vite": "^5.3.4",
+          "@vitejs/plugin-react": "^4.3.1"
+        },
+        "devDependencies": {
+          "typescript": "^5.5.3",
+          "@types/react": "^19.0.0",
+          "@types/react-dom": "^19.0.0"
+        }
+      }
+
+  - path: "vite.config.js"
+    content: |
+      import { defineConfig, loadEnv } from 'vite';
+      import react from '@vitejs/plugin-react';
+
+      export default defineConfig(({ mode }) => {
+        const env = loadEnv(mode, process.cwd(), '');
+        const cspHeader = [
+          "default-src 'self'",
+          "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.tailwindcss.com https://pagead2.googlesyndication.com https://tpc.googlesyndication.com",
+          "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.tailwindcss.com",
+          "font-src 'self' https://fonts.gstatic.com",
+          "img-src 'self' data: https:",
+          "media-src 'self' data: blob:",
+          "connect-src 'self' ws: wss: https: http: *", 
+          "frame-src 'self' https://googleads.g.doubleclick.net https://tpc.googlesyndication.com https://www.google.com",
+          "frame-ancestors 'self' https://aistudio.google.com https://*.google.com https://*.googleusercontent.com"
+        ].join('; ');
+
+        return {
+          plugins: [react()],
+          define: { 'process.env.API_KEY': JSON.stringify(env.API_KEY || '') },
+          server: {
+            host: '0.0.0.0',
+            port: 8080,
+            strictPort: true,
+            allowedHosts: true,
+            headers: {
+              'Content-Security-Policy': cspHeader,
+              'Access-Control-Allow-Origin': '*',
+              'Access-Control-Allow-Methods': 'GET, POST, OPTIONS'
+            }
+          },
+          preview: {
+            host: '0.0.0.0',
+            port: 8080,
+            strictPort: true,
+            allowedHosts: true,
+            headers: {
+              'Content-Security-Policy': cspHeader,
+              'Access-Control-Allow-Origin': '*',
+              'Access-Control-Allow-Methods': 'GET, POST, OPTIONS'
+            }
+          },
+          build: { outDir: 'dist', sourcemap: true }
+        };
+      });
+
+  - path: ".dockerignore"
+    content: |
+      node_modules
+      dist
+      .git
+      .env
+      .DS_Store
+      Dockerfile.bck
+
+  - path: "components/ProgressBar.tsx"
+    content: |
+      import React from 'react';
+
+      interface ProgressBarProps {
+        current: number;
+        max: number;
+        label?: string;
+      }
+
+      export const ProgressBar: React.FC<ProgressBarProps> = ({ current, max, label }) => {
+        const percentage = Math.min(100, Math.max(0, (current / max) * 100));
+        return (
+          <div className="w-full flex flex-col gap-1">
+            {label && (
+              <div className="flex justify-between text-xs font-bold uppercase tracking-wider text-blue-500 dark:text-blue-300 transition-colors">
+                <span>{label}</span><span>{current} / {max}</span>
+              </div>
+            )}
+            <div className="h-3 w-full bg-blue-100 dark:bg-gray-800 rounded-full overflow-hidden shadow-inner transition-colors">
+              <div className="h-full bg-gradient-to-r from-blue-400 to-blue-600 dark:from-blue-500 dark:to-blue-700 transition-all duration-500 ease-out rounded-full relative" style={{ width: `${percentage}%` }}>
+                <div className="absolute inset-0 bg-white opacity-20 animate-pulse"></div>
+              </div>
+            </div>
+          </div>
+        );
+      };
+
+  - path: "translations.ts"
+    content: |
+      import { Language } from './types';
+
+      export const TRANSLATIONS: Record<Language, any> = {
+        it: {
+          subtitle: "Impara l'italiano",
+          streak_title: "Giorni consecutivi",
+          stars_title: "Stelle totali",
+          theme_dark: "Passa alla modalità scura",
+          theme_light: "Passa alla modalità chiara",
+          fullscreen_on: "Attiva Schermo Intero",
+          fullscreen_off: "Esci da Schermo Intero",
+          menu: "Menu",
+          settings: "Impostazioni",
+          sfx_label: "Effetti Sonori",
+          level: "Livello",
+          attempts: "Tentativi rimasti",
+          hint_btn: "Aiuto",
+          hint_btn_more: "Altro Aiuto",
+          hint_btn_none: "Aiuti finiti",
+          ad_label: "Annuncio pubblicitario",
+          win_msg: "Bravissimo!",
+          lose_msg: "Peccato!",
+          win_title: "Bravissimo!",
+          lose_title: "Peccato!",
+          italian_label: "Italiano",
+          english_label: "Inglese",
+          next_word: "Prossima parola",
+          keyboard_msg: "Usa la tua tastiera fisica per giocare!",
+          slogan: "Imparare divertendosi",
+          reset_btn: "Ricomincia da Zero",
+          reset_confirm: "Sei sicuro? Perderai tutti i progressi.",
+          yes_reset: "Sì, Cancella",
+          no_cancel: "No",
+          stats_title: "Statistiche",
+          stats_level: "Livello",
+          stats_found: "Parole Trovate",
+          stats_stars: "Stelle",
+          stats_streak: "Streak",
+          feedback_good: "Ottimo!",
+          feedback_bad: "Oops!",
+          feedback_try_again: "Riprova! 😢",
+          hint_intro_generic: "È un",
+          hint_intro_letter: "Ecco una lettera per te",
+          hint_no_consonants: "Non ci sono consonanti da rivelare!",
+          hint_fallback: "Nessun indizio disponibile.",
+          categories: {
+            animals: "Animali",
+            colors: "Colori",
+            objects: "Oggetti",
+            food: "Cibo",
+            people: "Persone",
+            verbs: "Verbs",
+            numbers: "Numeri",
+            time: "Tempo",
+            body: "Corpo",
+            emotions: "Emozioni",
+            weather: "Meteo",
+            nature: "Natura",
+            clothing: "Vestiti",
+            transport: "Trasporti",
+            school: "Scuola"
+          } as Record<string, string>
+        },
+        en: {
+          subtitle: "Learn Italian",
+          streak_title: "Current Streak",
+          stars_title: "Total Stars",
+          theme_dark: "Switch to Dark Mode",
+          theme_light: "Switch to Light Mode",
+          fullscreen_on: "Enter Fullscreen",
+          fullscreen_off: "Exit Fullscreen",
+          menu: "Menu",
+          settings: "Settings",
+          sfx_label: "Sound Effects",
+          level: "Level",
+          attempts: "Attempts remaining",
+          hint_btn: "Hint",
+          hint_btn_more: "Next Hint",
+          hint_btn_none: "No hints left",
+          ad_label: "Advertisement",
+          win_msg: "Great Job!",
+          lose_msg: "Too bad!",
+          win_title: "You Won!",
+          lose_title: "Game Over",
+          italian_label: "Italian",
+          english_label: "English",
+          next_word: "Next Word",
+          keyboard_msg: "Use your physical keyboard to play!",
+          slogan: "Learning while having fun",
+          reset_btn: "Reset Progress",
+          reset_confirm: "Are you sure? All progress will be lost.",
+          yes_reset: "Yes, Reset",
+          no_cancel: "No",
+          stats_title: "Statistics",
+          stats_level: "Level",
+          stats_found: "Words Found",
+          stats_stars: "Stars",
+          stats_streak: "Streak",
+          feedback_good: "Great!",
+          feedback_bad: "Oops!",
+          feedback_try_again: "Try again! 😢",
+          hint_intro_generic: "It's a",
+          hint_intro_letter: "Here is a letter for you",
+          hint_no_consonants: "No consonants left to reveal!",
+          hint_fallback: "No hint available.",
+          categories: {
+            animals: "Animals",
+            colors: "Colors",
+            objects: "Objects",
+            food: "Food",
+            people: "People",
+            verbs: "Verbs",
+            numbers: "Numbers",
+            time: "Time",
+            body: "Body",
+            emotions: "Emotions",
+            weather: "Weather",
+            nature: "Nature",
+            clothing: "Clothing",
+            transport: "Transport",
+            school: "School"
+          } as Record<string, string>
+        }
+      };
+
+  - path: "services/soundEffects.ts"
+    content: |
+      let audioCtx: AudioContext | null = null;
+
+      const getCtx = () => {
+        if (!audioCtx) {
+          audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+        }
+        return audioCtx;
+      };
+
+      const playTone = (freq: number, type: OscillatorType, duration: number, startTime: number = 0) => {
+        const ctx = getCtx();
+        if (ctx.state === 'suspended') ctx.resume();
+
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+
+        osc.type = type;
+        osc.frequency.setValueAtTime(freq, ctx.currentTime + startTime);
+        gain.gain.setValueAtTime(0.1, ctx.currentTime + startTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + startTime + duration);
+
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+
+        osc.start(ctx.currentTime + startTime);
+        osc.stop(ctx.currentTime + startTime + duration);
+      };
+
+      export const playClickSound = () => {
+        playTone(600, 'sine', 0.1);
+      };
+
+      export const playWinSound = () => {
+        const now = 0;
+        playTone(523.25, 'triangle', 0.2, now);
+        playTone(659.25, 'triangle', 0.2, now + 0.1);
+        playTone(783.99, 'triangle', 0.4, now + 0.2);
+        playTone(1046.50, 'sine', 0.6, now + 0.3);
+      };
+
+      export const playLoseSound = () => {
+        const ctx = getCtx();
+        if (ctx.state === 'suspended') ctx.resume();
+
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(200, ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(50, ctx.currentTime + 0.5);
+        gain.gain.setValueAtTime(0.1, ctx.currentTime);
+        gain.gain.linearRampToValueAtTime(0, ctx.currentTime + 0.5);
+
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+
+        osc.start();
+        osc.stop(ctx.currentTime + 0.5);
+      };

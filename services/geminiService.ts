@@ -1,3 +1,4 @@
+
 import { GoogleGenAI, Modality } from "@google/genai";
 
 // --- UTILITIES AUDIO ---
@@ -41,10 +42,6 @@ const openDB = (): Promise<IDBDatabase> => {
   return new Promise((resolve, reject) => {
     const request = indexedDB.open(DB_NAME, DB_VERSION);
     request.onupgradeneeded = (event) => {
-      if (!event.target) {
-        reject(new Error('Event target is null'));
-        return;
-      }
       const db = (event.target as IDBOpenDBRequest).result;
       if (!db.objectStoreNames.contains(STORE_NAME)) {
         db.createObjectStore(STORE_NAME);
@@ -141,7 +138,7 @@ const ensureAudioLoaded = async (text: string, language: 'it' | 'en'): Promise<A
     });
 
     const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
-    if (base64Audio && response.candidates && response.candidates[0]) {
+    if (base64Audio) {
       const rawBytes = decode(base64Audio);
       
       // Save raw PCM bytes to DB

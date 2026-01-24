@@ -6,11 +6,11 @@
 
 ## 2. Tech Stack
 - **Frontend Framework**: React 18 with TypeScript.
-- **Build Tool**: Vite (Standard NPM-based build).
-- **Styling**: Tailwind CSS (Standard PostCSS configuration with Dark Mode).
+- **Build Tool**: Vite.
+- **Styling**: Tailwind CSS (with Dark Mode support).
 - **AI Integration**: `@google/genai` (Gemini API) for high-quality audio pronunciation.
-- **State Management**: React `useState` and `useRef` encapsulated in a **Custom Hook**, with `localStorage` for persistence.
-- **Audio**: Web Audio API (`AudioContext`) for Gemini PCM streams and `SpeechSynthesis` for fallbacks.
+- **State Management**: React `useState`, `useRef`, and `localStorage` for persistence.
+- **Icons**: SVG icons embedded directly in components.
 
 ## 3. Functional Analysis
 
@@ -28,8 +28,7 @@
 - **Dual Language**: Words are stored with their English translation.
 - **Audio Pronunciation**:
   - *Italian*: Uses Gemini TTS (`voiceName: 'Kore'`) for authentic pronunciation.
-  - *English*: Uses Gemini TTS (`voiceName: 'Puck'`) or browser fallback.
-  - *Sequence*: On game end, plays Italian word, waits for a configurable delay (default 2s), then plays English translation.
+  - *English*: Uses Gemini TTS (`voiceName: 'Puck'`) or browser fallback (`SpeechSynthesisUtterance`).
 - **Hint System**:
   - Level 1: Displays a contextual sentence or definition.
   - Level 2: Reveals a random consonant in the hidden word.
@@ -55,26 +54,18 @@ interface Word {
 }
 ```
 
-**Config Object**:
-```typescript
-interface Config {
-  words_per_difficulty_level: number;
-  max_attempts: number;
-  enable_audio: boolean;
-  audio_delay_ms: number; // Delay between Italian and English audio
-}
-```
+**Game State**:
+Tracks current word, guesses, remaining attempts, difficulty progress, and user stats (streak, stars).
 
-### 3.5 Architecture & Logic
-The application follows a "Separation of Concerns" pattern:
-- **View Layer (`App.tsx`)**: Handles UI rendering, layout, themes, and user interactions. It contains almost no business logic.
-- **Logic Layer (`hooks/useHangmanGame.ts`)**: A custom React Hook that manages:
-  - Game state (current word, guesses, attempts).
-  - Rules (win/loss conditions, difficulty progression).
-  - Persistence (saving/loading from `localStorage`).
-- **Services**:
-  - `geminiService.ts`: Handles API calls, audio caching (IndexedDB + Memory), and PCM decoding.
-  - `soundEffects.ts`: Generates synthesized sound effects using the Web Audio API (oscillators) without external assets.
+### 3.5 AI Integration (Gemini Service)
+- **Service**: `geminiService.ts`
+- **Functionality**: `speakWithGemini(text, language)`
+- **Mechanism**:
+  1. Checks an in-memory `audioCache` to avoid redundant API calls.
+  2. If not cached, sends a request to Gemini `gemini-2.5-flash-preview-tts`.
+  3. Decodes raw PCM audio data.
+  4. Plays audio via Web Audio API (`AudioContext`).
+  5. Fallback to `window.speechSynthesis` if API key is missing or request fails.
 
 ## 4. Scalability & Future Improvements
 - **Dynamic Content**: Words are currently hardcoded in `constants.ts`. This could be moved to a backend or fetched from a CMS.
@@ -82,13 +73,9 @@ The application follows a "Separation of Concerns" pattern:
 - **New Modes**: Time attack mode or "Spelling Bee" mode using the existing audio infrastructure.
 
 ## 5. File Structure
-- `index.tsx`: Entry point.
-- `App.tsx`: Main UI View component.
-- `hooks/useHangmanGame.ts`: Core game logic and state management.
+- `App.tsx`: Main game controller and UI layout.
 - `types.ts`: TypeScript interfaces.
 - `constants.ts`: Game configuration and word database.
 - `translations.ts`: UI localization strings.
-- `services/geminiService.ts`: Audio handling and AI integration.
-- `services/soundEffects.ts`: Synthesized audio effects.
+- `services/geminiService.ts`: Audio handling and API calls.
 - `components/`: Reusable UI parts (Keyboard, HangmanVisual, ProgressBar, AdBanner).
-- `tailwind.config.js`: Tailwind CSS configuration.

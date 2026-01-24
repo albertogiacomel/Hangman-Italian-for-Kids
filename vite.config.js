@@ -4,8 +4,6 @@ import react from '@vitejs/plugin-react';
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
   
-  // CSP allows scripts/styles from self, Tailwind CDN, and Google APIs.
-  // 'unsafe-inline' is currently required for some style injection during dev.
   const cspHeader = [
     "default-src 'self'",
     "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.tailwindcss.com https://pagead2.googlesyndication.com https://tpc.googlesyndication.com",
@@ -13,7 +11,7 @@ export default defineConfig(({ mode }) => {
     "font-src 'self' https://fonts.gstatic.com",
     "img-src 'self' data: https:",
     "media-src 'self' data: blob:",
-    "connect-src 'self' ws: wss: https://generativelanguage.googleapis.com https://pagead2.googlesyndication.com https://*.google.com",
+    "connect-src 'self' ws: wss: https: http: *", 
     "frame-src 'self' https://googleads.g.doubleclick.net https://tpc.googlesyndication.com https://www.google.com",
     "frame-ancestors 'self' https://aistudio.google.com https://*.google.com https://*.googleusercontent.com"
   ].join('; ');
@@ -27,6 +25,7 @@ export default defineConfig(({ mode }) => {
       host: '0.0.0.0',
       port: 8080,
       strictPort: true,
+      allowedHosts: true,
       headers: {
         'Content-Security-Policy': cspHeader,
         'Access-Control-Allow-Origin': '*',
@@ -37,7 +36,7 @@ export default defineConfig(({ mode }) => {
       host: '0.0.0.0',
       port: 8080,
       strictPort: true,
-      allowedHosts: ['hangman.giacomel.info', 'aistudio.google.com', '.googleusercontent.com'],
+      allowedHosts: true,
       headers: {
         'Content-Security-Policy': cspHeader,
         'Access-Control-Allow-Origin': '*',
@@ -46,7 +45,7 @@ export default defineConfig(({ mode }) => {
     },
     build: {
       outDir: 'dist',
-      sourcemap: false
+      sourcemap: true
     }
   };
 });
