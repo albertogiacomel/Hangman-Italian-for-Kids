@@ -22,13 +22,23 @@ export default defineConfig(({ mode }) => {
     server: {
       host: '0.0.0.0',
       port: 8080,
-      strictPort: true
+      strictPort: true,
+      headers: {
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+        'X-Frame-Options': 'ALLOW-FROM https://aistudio.google.com'
+      }
     },
     preview: {
       host: '0.0.0.0',
       port: 8080,
       strictPort: true,
-      allowedHosts: ['hangman.giacomel.info']
+      allowedHosts: ['hangman.giacomel.info', 'aistudio.google.com', '.googleusercontent.com'],
+      headers: {
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+        'X-Frame-Options': 'ALLOW-FROM https://aistudio.google.com'
+      }
     }
   };
 });
