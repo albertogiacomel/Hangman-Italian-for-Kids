@@ -1,5 +1,7 @@
 {
   "name": "Imparare l'Italiano - Hangman",
   "description": "An interactive Italian vocabulary game for children with word lists, translations, and audio pronunciations using Gemini TTS.",
-  "requestFramePermissions": []
+  "requestFramePermissions": [
+    "microphone"
+  ]
 }
