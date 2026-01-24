@@ -37,6 +37,28 @@ const triggerConfetti = () => {
 };
 
 export default function App() {
+  // Theme Management
+  const [theme, setTheme] = useState(() => {
+    if (localStorage.getItem('theme')) {
+      return localStorage.getItem('theme') as 'light' | 'dark';
+    }
+    return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+  });
+
+  useEffect(() => {
+    const root = window.document.documentElement;
+    if (theme === 'dark') {
+      root.classList.add('dark');
+    } else {
+      root.classList.remove('dark');
+    }
+    localStorage.setItem('theme', theme);
+  }, [theme]);
+
+  const toggleTheme = () => {
+    setTheme(prev => prev === 'light' ? 'dark' : 'light');
+  };
+
   // Load initial state from localStorage if available
   const getInitialState = (): GameState => {
     try {
@@ -333,38 +355,55 @@ export default function App() {
   }, [gameState.currentWord, gameState.guessedLetters]);
 
   return (
-    <div className="min-h-screen bg-blue-50 pb-12 font-sans selection:bg-blue-200">
-      <header className="bg-white border-b shadow-sm sticky top-0 z-20 px-4 py-3 sm:px-6 sm:py-4 flex flex-wrap items-center justify-between gap-y-2">
+    <div className="min-h-screen bg-blue-50 dark:bg-gray-950 pb-12 font-sans selection:bg-blue-200 dark:selection:bg-blue-800 transition-colors duration-300">
+      <header className="bg-white dark:bg-gray-900 border-b dark:border-gray-800 shadow-sm sticky top-0 z-20 px-4 py-3 sm:px-6 sm:py-4 flex flex-wrap items-center justify-between gap-y-2 transition-colors duration-300">
         <div className="flex items-center gap-2">
-           <div className="bg-blue-600 text-white p-2 rounded-lg shadow-sm">
+           <div className="bg-blue-600 dark:bg-blue-700 text-white p-2 rounded-lg shadow-sm">
              <span className="text-xl">🇮🇹</span>
            </div>
            <div>
-             <h1 className="text-xl sm:text-2xl font-title text-blue-800 leading-none">Hangman</h1>
-             <p className="text-xs text-blue-400 font-bold tracking-wider uppercase">Impara l'italiano</p>
+             <h1 className="text-xl sm:text-2xl font-title text-blue-800 dark:text-blue-400 leading-none">Hangman</h1>
+             <p className="text-xs text-blue-400 dark:text-blue-300 font-bold tracking-wider uppercase">Impara l'italiano</p>
            </div>
         </div>
         
         <div className="flex flex-wrap gap-2 sm:gap-4 items-center ml-auto">
           {/* Streak Badge */}
-          <div className="flex items-center gap-1 bg-orange-100 text-orange-600 px-3 py-1.5 rounded-full border border-orange-200 shadow-sm" title="Giorni consecutivi">
+          <div className="flex items-center gap-1 bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-300 px-3 py-1.5 rounded-full border border-orange-200 dark:border-orange-800 shadow-sm" title="Giorni consecutivi">
              <span className="text-lg">🔥</span>
              <span className="font-bold text-sm">{gameState.streak}</span>
           </div>
 
           {/* Stars Badge */}
-          <div className="flex items-center gap-1 bg-yellow-100 text-yellow-700 px-3 py-1.5 rounded-full border border-yellow-200 shadow-sm" title="Stelle totali">
+          <div className="flex items-center gap-1 bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300 px-3 py-1.5 rounded-full border border-yellow-200 dark:border-yellow-800 shadow-sm" title="Stelle totali">
              <span className="text-lg">⭐</span>
              <span className="font-bold text-sm">{gameState.totalStars}</span>
           </div>
 
-          <div className="hidden sm:flex text-sm font-bold bg-purple-100 text-purple-700 px-3 py-1.5 rounded-full uppercase border border-purple-200">
+          <div className="hidden sm:flex text-sm font-bold bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 px-3 py-1.5 rounded-full uppercase border border-purple-200 dark:border-purple-800">
             {gameState.currentDifficulty}
           </div>
+
+          {/* Theme Toggle */}
+          <button 
+            onClick={toggleTheme}
+            className="p-2 bg-gray-50 dark:bg-gray-800 text-gray-500 dark:text-gray-300 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors border border-gray-200 dark:border-gray-700"
+            title={theme === 'light' ? "Passa alla modalità scura" : "Passa alla modalità chiara"}
+          >
+             {theme === 'light' ? (
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+                </svg>
+             ) : (
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
+                </svg>
+             )}
+          </button>
           
           <button 
             onClick={toggleFullScreen}
-            className="p-2 bg-gray-50 text-gray-500 rounded-xl hover:bg-gray-100 transition-colors border border-gray-200"
+            className="p-2 bg-gray-50 dark:bg-gray-800 text-gray-500 dark:text-gray-300 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors border border-gray-200 dark:border-gray-700"
             title={isFullScreen ? "Esci da Schermo Intero" : "Attiva Schermo Intero"}
           >
             {isFullScreen ? (
@@ -382,7 +421,7 @@ export default function App() {
 
       <main className="max-w-4xl mx-auto mt-6 sm:mt-8 px-4">
         {/* Progress Bar for Current Level */}
-        <div className="mb-6 bg-white p-4 rounded-2xl shadow-sm border border-blue-50">
+        <div className="mb-6 bg-white dark:bg-gray-900 p-4 rounded-2xl shadow-sm border border-blue-50 dark:border-gray-800 transition-colors duration-300">
           <ProgressBar 
             current={gameState.difficultyProgress[gameState.currentDifficulty] % CONFIG.words_per_difficulty_level} 
             max={CONFIG.words_per_difficulty_level} 
@@ -390,7 +429,7 @@ export default function App() {
           />
         </div>
 
-        <div className="bg-white rounded-3xl shadow-xl overflow-hidden border-4 border-blue-100 p-6 md:p-10 text-center relative">
+        <div className="bg-white dark:bg-gray-900 rounded-3xl shadow-xl overflow-hidden border-4 border-blue-100 dark:border-gray-800 p-6 md:p-10 text-center relative transition-colors duration-300">
           
           <div className="flex flex-col md:flex-row items-center justify-center gap-8">
             <div className="w-full md:w-1/3 flex justify-center">
@@ -398,20 +437,20 @@ export default function App() {
             </div>
 
             <div className="w-full md:w-2/3 flex flex-col items-center gap-4">
-              <div className="flex items-center gap-2 px-4 py-2 bg-gray-50 rounded-full border border-gray-100 text-gray-500 uppercase tracking-widest text-xs font-bold">
+              <div className="flex items-center gap-2 px-4 py-2 bg-gray-50 dark:bg-gray-800 rounded-full border border-gray-100 dark:border-gray-700 text-gray-500 dark:text-gray-300 uppercase tracking-widest text-xs font-bold transition-colors">
                 <span className="text-lg">{CategoryEmoji[gameState.currentWord?.category as keyof typeof CategoryEmoji] || '🏷️'}</span>
                 <span>{gameState.currentWord?.category}</span>
               </div>
               
-              <div className="text-4xl sm:text-5xl md:text-6xl font-mono font-bold tracking-[0.15em] text-gray-800 break-words w-full">
+              <div className="text-4xl sm:text-5xl md:text-6xl font-mono font-bold tracking-[0.15em] text-gray-800 dark:text-white break-words w-full transition-colors">
                 {displayWord}
               </div>
 
               <div className="h-12 flex items-center justify-center w-full">
                 <div className={`text-lg sm:text-xl font-bold transition-all px-4 py-1 rounded-lg ${
-                   gameState.feedback.includes('Bravissimo') ? 'text-green-600 bg-green-50' : 
-                   gameState.feedback.includes('Riprova') ? 'text-red-500 bg-red-50' :
-                   gameState.feedback ? 'text-blue-600 bg-blue-50' : ''
+                   gameState.feedback.includes('Bravissimo') ? 'text-green-600 dark:text-green-300 bg-green-50 dark:bg-green-900/50' : 
+                   gameState.feedback.includes('Riprova') ? 'text-red-500 dark:text-red-300 bg-red-50 dark:bg-red-900/50' :
+                   gameState.feedback ? 'text-blue-600 dark:text-blue-300 bg-blue-50 dark:bg-blue-900/50' : ''
                 }`}>
                   {gameState.feedback}
                 </div>
@@ -424,8 +463,8 @@ export default function App() {
                   className={`
                     flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-all
                     ${gameState.hintsUsed >= 2 || gameState.gameStatus !== 'playing'
-                      ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                      : 'bg-yellow-100 text-yellow-700 hover:bg-yellow-200 shadow-sm hover:shadow-md'
+                      ? 'bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-600 cursor-not-allowed'
+                      : 'bg-yellow-100 dark:bg-yellow-900/40 text-yellow-700 dark:text-yellow-300 hover:bg-yellow-200 dark:hover:bg-yellow-900/60 shadow-sm hover:shadow-md'
                     }
                   `}
                 >
@@ -445,14 +484,14 @@ export default function App() {
             />
           </div>
 
-          <div className="mt-8 flex justify-center gap-4 text-gray-600 font-medium text-sm">
+          <div className="mt-8 flex justify-center gap-4 text-gray-600 dark:text-gray-400 font-medium text-sm">
              Tentativi rimasti: 
              <div className="flex gap-1">
                {[...Array(gameState.attemptsRemaining)].map((_, i) => (
                  <span key={i} className="text-red-500">❤️</span>
                ))}
                {[...Array(CONFIG.max_attempts - gameState.attemptsRemaining)].map((_, i) => (
-                 <span key={`lost-${i}`} className="text-gray-300">🖤</span>
+                 <span key={`lost-${i}`} className="text-gray-300 dark:text-gray-700">🖤</span>
                ))}
              </div>
           </div>
@@ -463,7 +502,7 @@ export default function App() {
 
         {(gameState.gameStatus === 'won' || gameState.gameStatus === 'lost') && (
           <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-in fade-in duration-300">
-            <div className="bg-white rounded-3xl p-6 sm:p-8 max-w-sm w-full text-center shadow-2xl scale-100 animate-in zoom-in-95 duration-300 relative overflow-hidden">
+            <div className="bg-white dark:bg-gray-900 rounded-3xl p-6 sm:p-8 max-w-sm w-full text-center shadow-2xl scale-100 animate-in zoom-in-95 duration-300 relative overflow-hidden transition-colors">
               
               {/* Confetti Background for Win - Simple CSS circles */}
               {gameState.gameStatus === 'won' && (
@@ -479,7 +518,7 @@ export default function App() {
                 {gameState.gameStatus === 'won' ? '🏆' : '😿'}
               </div>
               
-              <h2 className={`text-4xl font-title mb-2 ${gameState.gameStatus === 'won' ? 'text-green-600' : 'text-orange-600'}`}>
+              <h2 className={`text-4xl font-title mb-2 ${gameState.gameStatus === 'won' ? 'text-green-600 dark:text-green-400' : 'text-orange-600 dark:text-orange-400'}`}>
                 {gameState.gameStatus === 'won' ? 'Bravissimo!' : 'Peccato!'}
               </h2>
               
@@ -489,7 +528,7 @@ export default function App() {
                      <svg key={i} xmlns="http://www.w3.org/2000/svg" className={`h-8 w-8 ${
                        i < (gameState.attemptsRemaining >= 4 ? 3 : gameState.attemptsRemaining >= 2 ? 2 : 1) 
                        ? 'text-yellow-400 fill-current' 
-                       : 'text-gray-200 fill-current'
+                       : 'text-gray-200 dark:text-gray-700 fill-current'
                      }`} viewBox="0 0 20 20">
                        <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
                      </svg>
@@ -497,28 +536,28 @@ export default function App() {
                 </div>
               )}
 
-              <div className="bg-blue-50 rounded-2xl p-4 my-6 border border-blue-100 relative">
+              <div className="bg-blue-50 dark:bg-gray-800 rounded-2xl p-4 my-6 border border-blue-100 dark:border-gray-700 relative transition-colors">
                 <div className="flex items-center justify-between mb-1">
-                  <span className="text-xs text-blue-400 uppercase font-bold tracking-wider">Italiano</span>
-                  <button onClick={() => speakWithGemini(gameState.currentWord!.italian, 'it')} className="p-1 hover:bg-blue-100 rounded-full text-blue-500 transition-colors">
+                  <span className="text-xs text-blue-400 dark:text-blue-300 uppercase font-bold tracking-wider">Italiano</span>
+                  <button onClick={() => speakWithGemini(gameState.currentWord!.italian, 'it')} className="p-1 hover:bg-blue-100 dark:hover:bg-gray-700 rounded-full text-blue-500 dark:text-blue-300 transition-colors">
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" viewBox="0 0 20 20" fill="currentColor">
                       <path fillRule="evenodd" d="M9.383 3.076A1 1 0 0110 4v12a1 1 0 01-1.707.707L4.586 13H2a1 1 0 01-1-1V8a1 1 0 011-1h2.586l3.707-3.707a1 1 0 011.09-.217zM14.657 2.929a1 1 0 011.414 0A9.972 9.972 0 0119 10a9.972 9.972 0 01-2.929 7.071 1 1 0 01-1.414-1.414A7.971 7.971 0 0017 10c0-2.21-.894-4.208-2.343-5.657a1 1 0 010-1.414zm-2.829 2.828a1 1 0 011.415 0A5.983 5.983 0 0115 10a5.983 5.983 0 01-1.757 4.243 1 1 0 01-1.415-1.415A3.984 3.984 0 0013 10a3.984 3.984 0 00-1.172-2.828 1 1 0 010-1.415z" clipRule="evenodd" />
                     </svg>
                   </button>
                 </div>
-                <div className="text-3xl font-bold text-gray-800 mb-3 uppercase tracking-widest">
+                <div className="text-3xl font-bold text-gray-800 dark:text-white mb-3 uppercase tracking-widest transition-colors">
                   {gameState.currentWord?.italian}
                 </div>
-                <div className="border-t border-blue-200 pt-3">
+                <div className="border-t border-blue-200 dark:border-gray-700 pt-3 transition-colors">
                   <div className="flex items-center justify-between mb-1">
-                    <span className="text-xs text-purple-400 uppercase font-bold tracking-wider">Inglese</span>
-                    <button onClick={() => speakInstant(gameState.currentWord!.english, 'en')} className="p-1 hover:bg-purple-100 rounded-full text-purple-500 transition-colors">
+                    <span className="text-xs text-purple-400 dark:text-purple-300 uppercase font-bold tracking-wider">Inglese</span>
+                    <button onClick={() => speakInstant(gameState.currentWord!.english, 'en')} className="p-1 hover:bg-purple-100 dark:hover:bg-gray-700 rounded-full text-purple-500 dark:text-purple-300 transition-colors">
                       <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" viewBox="0 0 20 20" fill="currentColor">
                         <path fillRule="evenodd" d="M9.383 3.076A1 1 0 0110 4v12a1 1 0 01-1.707.707L4.586 13H2a1 1 0 01-1-1V8a1 1 0 011-1h2.586l3.707-3.707a1 1 0 011.09-.217zM14.657 2.929a1 1 0 011.414 0A9.972 9.972 0 0119 10a9.972 9.972 0 01-2.929 7.071 1 1 0 01-1.414-1.414A7.971 7.971 0 0017 10c0-2.21-.894-4.208-2.343-5.657a1 1 0 010-1.414zm-2.829 2.828a1 1 0 011.415 0A5.983 5.983 0 0115 10a5.983 5.983 0 01-1.757 4.243 1 1 0 01-1.415-1.415A3.984 3.984 0 0013 10a3.984 3.984 0 00-1.172-2.828 1 1 0 010-1.415z" clipRule="evenodd" />
                       </svg>
                     </button>
                   </div>
-                  <div className="text-xl font-medium text-blue-700 capitalize">
+                  <div className="text-xl font-medium text-blue-700 dark:text-blue-300 capitalize transition-colors">
                     {gameState.currentWord?.english}
                   </div>
                 </div>
@@ -527,7 +566,7 @@ export default function App() {
               <div className="flex flex-col gap-3">
                 <button 
                   onClick={selectNewWord}
-                  className="w-full bg-gradient-to-r from-blue-500 to-blue-700 text-white font-bold py-4 rounded-xl shadow-lg hover:shadow-xl hover:-translate-y-1 transition-all text-lg flex items-center justify-center gap-2"
+                  className="w-full bg-gradient-to-r from-blue-500 to-blue-700 dark:from-blue-600 dark:to-blue-800 text-white font-bold py-4 rounded-xl shadow-lg hover:shadow-xl hover:-translate-y-1 transition-all text-lg flex items-center justify-center gap-2"
                 >
                   <span>Prossima parola</span>
                   <span>🚀</span>
@@ -538,7 +577,7 @@ export default function App() {
         )}
       </main>
 
-      <footer className="mt-8 text-center text-gray-400 text-sm px-4 pb-4">
+      <footer className="mt-8 text-center text-gray-400 dark:text-gray-500 text-sm px-4 pb-4 transition-colors">
         <p>Usa la tua tastiera fisica per giocare!</p>
         <p className="mt-1 font-medium">Imparare divertendosi • Learning while having fun</p>
       </footer>

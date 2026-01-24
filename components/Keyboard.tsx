@@ -21,8 +21,8 @@ export const Keyboard: React.FC<KeyboardProps> = ({ guessedLetters, onLetterGues
             className={`
               h-12 w-full flex items-center justify-center rounded-xl text-lg font-bold transition-all duration-200
               ${isUsed 
-                ? 'bg-gray-200 text-gray-400 cursor-not-allowed transform scale-95' 
-                : 'bg-white text-blue-600 shadow-md hover:bg-blue-50 active:translate-y-1 hover:shadow-lg border-b-4 border-blue-200 active:border-b-0'
+                ? 'bg-gray-200 dark:bg-gray-900/50 text-gray-400 dark:text-gray-600 cursor-not-allowed transform scale-95' 
+                : 'bg-white dark:bg-gray-800 text-blue-600 dark:text-blue-200 shadow-md hover:bg-blue-50 dark:hover:bg-gray-700 active:translate-y-1 hover:shadow-lg border-b-4 border-blue-200 dark:border-gray-950 active:border-b-0'
               }
             `}
           >

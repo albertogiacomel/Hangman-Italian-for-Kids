@@ -17,8 +17,8 @@ export const AdBanner: React.FC<AdBannerProps> = ({ slot = "1234567890" }) => {
 
   return (
     <div className="my-8 w-full flex flex-col items-center">
-      <span className="text-[10px] text-gray-400 uppercase tracking-widest mb-1">Annuncio pubblicitario</span>
-      <div className="bg-gray-100 border border-dashed border-gray-300 rounded-lg flex items-center justify-center overflow-hidden min-h-[100px] w-full max-w-[728px]">
+      <span className="text-[10px] text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-1">Annuncio pubblicitario</span>
+      <div className="bg-gray-100 dark:bg-gray-800 border border-dashed border-gray-300 dark:border-gray-700 rounded-lg flex items-center justify-center overflow-hidden min-h-[100px] w-full max-w-[728px] transition-colors">
         {/* Sostituire i parametri data-ad-client e data-ad-slot con i propri valori reali */}
         <ins className="adsbygoogle"
              style={{ display: 'block', width: '100%' }}
@@ -28,7 +28,7 @@ export const AdBanner: React.FC<AdBannerProps> = ({ slot = "1234567890" }) => {
              data-full-width-responsive="true"></ins>
         
         {/* Placeholder visibile solo se l'annuncio non viene caricato (per demo) */}
-        <div className="absolute text-gray-300 text-sm font-medium pointer-events-none">
+        <div className="absolute text-gray-300 dark:text-gray-600 text-sm font-medium pointer-events-none">
           Spazio Pubblicitario Google
         </div>
       </div>
