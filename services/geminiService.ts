@@ -1,4 +1,3 @@
-
 import { GoogleGenAI, Modality } from "@google/genai";
 
 // --- UTILITIES AUDIO ---
@@ -85,6 +84,8 @@ const saveAudioToDB = async (key: string, data: ArrayBuffer) => {
 let sharedAudioCtx: AudioContext | null = null;
 // Simple In-Memory Cache (for speed within same session before DB hit)
 const memoryCache = new Map<string, AudioBuffer>();
+// Circuit breaker for Quota Exhausted
+let isQuotaExhausted = false;
 
 const getAudioContext = () => {
   if (!sharedAudioCtx) {
@@ -98,6 +99,9 @@ const getAudioContext = () => {
 const ensureAudioLoaded = async (text: string, language: 'it' | 'en'): Promise<AudioBuffer | null> => {
   // Inglese usa browser native, niente da precaricare lato API
   if (language === 'en') return null;
+  
+  // Circuit breaker: se abbiamo finito la quota, inutile provare
+  if (isQuotaExhausted) return null;
 
   const apiKey = process.env.API_KEY;
   if (!apiKey) return null;
@@ -150,8 +154,28 @@ const ensureAudioLoaded = async (text: string, language: 'it' | 'en'): Promise<A
       
       return audioBuffer;
     }
-  } catch (error) {
-    console.error("Gemini TTS Preload/Fetch Error:", error);
+  } catch (error: any) {
+    // Gestione errore Quota Exhausted (429)
+    // Checks for standard status/code or nested error object structure often returned by the API
+    const isQuotaError = 
+      error?.status === 429 || 
+      error?.code === 429 || 
+      error?.error?.code === 429 || 
+      error?.error?.status === 'RESOURCE_EXHAUSTED' ||
+      (error?.message && (
+        error.message.includes('429') || 
+        error.message.includes('quota') || 
+        error.message.includes('RESOURCE_EXHAUSTED')
+      ));
+
+    if (isQuotaError) {
+      if (!isQuotaExhausted) {
+        console.warn("Gemini API Quota Exceeded. Switching to browser TTS fallback for this session.");
+        isQuotaExhausted = true;
+      }
+    } else {
+      console.error("Gemini TTS Preload/Fetch Error:", error);
+    }
   }
   return null;
 };
@@ -180,7 +204,7 @@ export const speakWithGemini = async (text: string, language: 'it' | 'en' = 'it'
     if (audioBuffer) {
       playBuffer(audioBuffer, ctx);
     } else {
-      // Fallback if buffer creation failed
+      // Fallback if buffer creation failed or quota exceeded
       speakInstant(text, language);
     }
   } catch (e) {
