@@ -19,15 +19,7 @@ const decodeAudioData = async (
   sampleRate: number,
   numChannels: number,
 ): Promise<AudioBuffer> => {
-  // Se è già un ArrayBuffer, usalo, altrimenti prendi il buffer dalla Uint8Array
   const bufferToDecode = data instanceof Uint8Array ? data.buffer : data;
-  
-  // Nota: decodeAudioData nativo è preferibile per file completi, 
-  // ma per raw PCM (come quello di Gemini Live/TTS a volte) serve la decodifica manuale o corretta.
-  // Qui assumiamo che Gemini restituisca un formato decodificabile o PCM raw.
-  // Tuttavia, nel codice originale si usava una decodifica manuale per PCM 24kHz.
-  // Manteniamo la logica originale PCM int16 -> float32 per coerenza.
-
   const dataInt16 = new Int16Array(bufferToDecode);
   const frameCount = dataInt16.length / numChannels;
   const buffer = ctx.createBuffer(numChannels, frameCount, sampleRate);
@@ -94,49 +86,42 @@ let sharedAudioCtx: AudioContext | null = null;
 // Simple In-Memory Cache (for speed within same session before DB hit)
 const memoryCache = new Map<string, AudioBuffer>();
 
-export const speakWithGemini = async (text: string, language: 'it' | 'en' = 'it') => {
-  // 1. OTTIMIZZAZIONE: Usa il TTS del browser per l'Inglese.
-  // Gemini costa risorse, il browser è gratis e perfetto per l'inglese.
-  if (language === 'en') {
-    speakInstant(text, language);
-    return;
-  }
-
-  const apiKey = process.env.API_KEY;
-  if (!apiKey) {
-    speakInstant(text, language);
-    return;
-  }
-
-  // Inizializza AudioContext
+const getAudioContext = () => {
   if (!sharedAudioCtx) {
     sharedAudioCtx = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
   }
-  if (sharedAudioCtx.state === 'suspended') {
-    await sharedAudioCtx.resume();
-  }
+  return sharedAudioCtx;
+};
 
+// Core function: Ensures audio is in cache (Memory or DB), fetching from API if needed.
+// Does NOT play the audio.
+const ensureAudioLoaded = async (text: string, language: 'it' | 'en'): Promise<AudioBuffer | null> => {
+  // Inglese usa browser native, niente da precaricare lato API
+  if (language === 'en') return null;
+
+  const apiKey = process.env.API_KEY;
+  if (!apiKey) return null;
+
+  const ctx = getAudioContext();
   const cacheKey = `${language}:${text.toLowerCase()}`;
-  
-  // 2. CHECK MEMORY CACHE
+
+  // 1. CHECK MEMORY CACHE
   if (memoryCache.has(cacheKey)) {
-    playBuffer(memoryCache.get(cacheKey)!, sharedAudioCtx);
-    return;
+    return memoryCache.get(cacheKey)!;
   }
 
-  // 3. CHECK PERSISTENT DB CACHE (IndexedDB)
+  // 2. CHECK PERSISTENT DB CACHE (IndexedDB)
   const cachedArrayBuffer = await getAudioFromDB(cacheKey);
-  if (cachedArrayBuffer && sharedAudioCtx) {
-    const audioBuffer = await decodeAudioData(cachedArrayBuffer, sharedAudioCtx, 24000, 1);
+  if (cachedArrayBuffer) {
+    const audioBuffer = await decodeAudioData(cachedArrayBuffer, ctx, 24000, 1);
     memoryCache.set(cacheKey, audioBuffer); // Promuovi in memoria
-    playBuffer(audioBuffer, sharedAudioCtx);
-    return;
+    return audioBuffer;
   }
 
-  // 4. CALL GEMINI API (Solo se non in cache)
+  // 3. CALL GEMINI API
   const ai = new GoogleGenAI({ apiKey });
   const prompt = `Dì con voce molto chiara e amichevole: ${text}`;
-  const voiceName = 'Kore'; // Usiamo Kore per l'italiano
+  const voiceName = 'Kore';
 
   try {
     const response = await ai.models.generateContent({
@@ -153,24 +138,53 @@ export const speakWithGemini = async (text: string, language: 'it' | 'en' = 'it'
     });
 
     const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
-    if (base64Audio && sharedAudioCtx) {
-      // Decode base64 to Uint8Array
+    if (base64Audio) {
       const rawBytes = decode(base64Audio);
       
-      // Save raw PCM bytes to DB (persistente)
+      // Save raw PCM bytes to DB
       saveAudioToDB(cacheKey, rawBytes.buffer);
 
-      // Decode to AudioBuffer for playback
-      const audioBuffer = await decodeAudioData(rawBytes, sharedAudioCtx, 24000, 1);
-      
-      // Save to Memory Cache
+      // Decode and Cache
+      const audioBuffer = await decodeAudioData(rawBytes, ctx, 24000, 1);
       memoryCache.set(cacheKey, audioBuffer);
       
-      playBuffer(audioBuffer, sharedAudioCtx);
+      return audioBuffer;
     }
   } catch (error) {
-    console.error("Gemini TTS Error:", error);
-    // Fallback in case of API error or Quota Exceeded
+    console.error("Gemini TTS Preload/Fetch Error:", error);
+  }
+  return null;
+};
+
+// Public: Preloads audio silently. Good for calling at start of turn.
+export const preloadAudio = async (text: string, language: 'it' | 'en' = 'it') => {
+  await ensureAudioLoaded(text, language);
+};
+
+// Public: Plays audio (fetching if necessary)
+export const speakWithGemini = async (text: string, language: 'it' | 'en' = 'it') => {
+  if (language === 'en') {
+    speakInstant(text, language);
+    return;
+  }
+
+  const ctx = getAudioContext();
+  if (ctx.state === 'suspended') {
+    await ctx.resume();
+  }
+
+  try {
+    // Ensure loaded (might already be cached thanks to preloadAudio)
+    const audioBuffer = await ensureAudioLoaded(text, language);
+    
+    if (audioBuffer) {
+      playBuffer(audioBuffer, ctx);
+    } else {
+      // Fallback if buffer creation failed
+      speakInstant(text, language);
+    }
+  } catch (e) {
+    console.error("Playback error", e);
     speakInstant(text, language);
   }
 };
@@ -182,12 +196,10 @@ const playBuffer = (buffer: AudioBuffer, ctx: AudioContext) => {
   source.start();
 };
 
-// Funzione per feedback immediato senza latenza di rete (Browser Native)
 export const speakInstant = (text: string, language: 'it' | 'en' = 'it') => {
   const utter = new SpeechSynthesisUtterance(text);
   utter.lang = language === 'it' ? 'it-IT' : 'en-US';
   
-  // Cerchiamo una voce Google/Microsoft se disponibile per qualità migliore
   const voices = window.speechSynthesis.getVoices();
   const preferredVoice = voices.find(v => 
     v.lang.startsWith(language === 'it' ? 'it' : 'en') && 
@@ -195,7 +207,7 @@ export const speakInstant = (text: string, language: 'it' | 'en' = 'it') => {
   );
   if (preferredVoice) utter.voice = preferredVoice;
 
-  utter.rate = 0.9; // Leggermente più lento per chiarezza didattica
+  utter.rate = 0.9;
   window.speechSynthesis.cancel(); 
   window.speechSynthesis.speak(utter);
 };

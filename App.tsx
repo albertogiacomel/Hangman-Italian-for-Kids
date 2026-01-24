@@ -7,7 +7,7 @@ import { HangmanVisual } from './components/HangmanVisual';
 import { Keyboard } from './components/Keyboard';
 import { AdBanner } from './components/AdBanner';
 import { ProgressBar } from './components/ProgressBar';
-import { speakWithGemini, speakInstant } from './services/geminiService';
+import { speakWithGemini, speakInstant, preloadAudio } from './services/geminiService';
 import { playClickSound, playWinSound, playLoseSound } from './services/soundEffects';
 
 export default function App() {
@@ -210,6 +210,11 @@ export default function App() {
 
     const selectedWord = availableWords[Math.floor(Math.random() * availableWords.length)];
 
+    // PRELOAD AUDIO IMMEDIATELY FOR THE NEW WORD
+    if (CONFIG.enable_audio && selectedWord) {
+      preloadAudio(selectedWord.italian, 'it');
+    }
+
     setGameState((prev) => ({
       ...prev,
       currentWord: selectedWord,
@@ -312,8 +317,8 @@ export default function App() {
 
     if (CONFIG.enable_audio && state.currentWord) {
       handleSpeak(state.currentWord.italian, 'it');
-      // Ritardo per l'inglese leggermente aumentato per non sovrapporsi
-      setTimeout(() => handleSpeak(state.currentWord!.english, 'en'), 1500);
+      // Ritardo per l'inglese aumentato a 3000ms per evitare sovrapposizioni
+      setTimeout(() => handleSpeak(state.currentWord!.english, 'en'), 3000);
     }
   };
 
@@ -361,7 +366,8 @@ export default function App() {
       
       if (CONFIG.enable_audio) {
         handleSpeak(state.currentWord.italian, 'it');
-        setTimeout(() => handleSpeak(state.currentWord!.english, 'en'), 1500);
+        // Ritardo per l'inglese aumentato a 3000ms
+        setTimeout(() => handleSpeak(state.currentWord!.english, 'en'), 3000);
       }
     } else {
       setGameState(prev => ({
