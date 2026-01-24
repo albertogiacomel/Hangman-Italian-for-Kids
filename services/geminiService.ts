@@ -137,7 +137,7 @@ const ensureAudioLoaded = async (text: string, language: 'it' | 'en'): Promise<A
     });
 
     const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
-    if (base64Audio) {
+    if (base64Audio && response.candidates) {
       const rawBytes = decode(base64Audio);
       
       // Save raw PCM bytes to DB
