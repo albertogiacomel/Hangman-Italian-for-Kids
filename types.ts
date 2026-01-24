@@ -11,6 +11,7 @@ export interface Config {
   words_per_difficulty_level: number;
   max_attempts: number;
   enable_audio: boolean;
+  audio_delay_ms: number;
 }
 
 export type GameStatus = 'new' | 'playing' | 'won' | 'lost';

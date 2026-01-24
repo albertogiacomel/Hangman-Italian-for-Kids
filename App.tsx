@@ -317,8 +317,8 @@ export default function App() {
 
     if (CONFIG.enable_audio && state.currentWord) {
       handleSpeak(state.currentWord.italian, 'it');
-      // Ritardo per l'inglese aumentato a 3000ms per evitare sovrapposizioni
-      setTimeout(() => handleSpeak(state.currentWord!.english, 'en'), 3000);
+      // Ritardo modificabile tramite configurazione
+      setTimeout(() => handleSpeak(state.currentWord!.english, 'en'), CONFIG.audio_delay_ms);
     }
   };
 
@@ -366,8 +366,8 @@ export default function App() {
       
       if (CONFIG.enable_audio) {
         handleSpeak(state.currentWord.italian, 'it');
-        // Ritardo per l'inglese aumentato a 3000ms
-        setTimeout(() => handleSpeak(state.currentWord!.english, 'en'), 3000);
+        // Ritardo modificabile tramite configurazione
+        setTimeout(() => handleSpeak(state.currentWord!.english, 'en'), CONFIG.audio_delay_ms);
       }
     } else {
       setGameState(prev => ({
