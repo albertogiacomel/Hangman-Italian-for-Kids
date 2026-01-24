@@ -22,16 +22,14 @@ export default defineConfig(({ mode }) => {
     server: {
       host: '0.0.0.0',
       port: 8080,
-      strictPort: true
+      strictPort: true,
+      allowedHosts: true // Allow all hosts for AI Studio/Cloud environments
     },
     preview: {
       host: '0.0.0.0',
       port: 8080,
       strictPort: true,
-      allowedHosts: [
-        'imparare-l-italiano-hangman-951398195520.us-west1.run.app',
-        'hangman.giacomel.info'
-      ]
+      allowedHosts: true // Allow all hosts for AI Studio/Cloud environments
     }
   };
 });
