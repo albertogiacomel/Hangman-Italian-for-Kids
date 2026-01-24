@@ -1,18 +1,20 @@
-
 import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
   
-  // CSP che permette embedding in AI Studio
+  // CSP allows scripts/styles from self, Tailwind CDN, and Google APIs.
+  // 'unsafe-inline' is currently required for some style injection during dev.
   const cspHeader = [
     "default-src 'self'",
-    "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.tailwindcss.com https://pagead2.googlesyndication.com",
+    "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.tailwindcss.com https://pagead2.googlesyndication.com https://tpc.googlesyndication.com",
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.tailwindcss.com",
     "font-src 'self' https://fonts.gstatic.com",
     "img-src 'self' data: https:",
-    "connect-src 'self' ws: wss: https://generativelanguage.googleapis.com https://pagead2.googlesyndication.com",
+    "media-src 'self' data: blob:",
+    "connect-src 'self' ws: wss: https://generativelanguage.googleapis.com https://pagead2.googlesyndication.com https://*.google.com",
+    "frame-src 'self' https://googleads.g.doubleclick.net https://tpc.googlesyndication.com https://www.google.com",
     "frame-ancestors 'self' https://aistudio.google.com https://*.google.com https://*.googleusercontent.com"
   ].join('; ');
 
