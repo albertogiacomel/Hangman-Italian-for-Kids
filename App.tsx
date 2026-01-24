@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { Word, GameState, CategoryEmoji, LETTER_NAMES_ITALIAN, Language } from './types';
+import { GameState, CategoryEmoji, LETTER_NAMES_ITALIAN, Language } from './types';
 import { INITIAL_WORDS, ITALIAN_ALPHABET, CONFIG } from './constants';
 import { TRANSLATIONS } from './translations';
 import { HangmanVisual } from './components/HangmanVisual';
@@ -8,6 +8,7 @@ import { Keyboard } from './components/Keyboard';
 import { AdBanner } from './components/AdBanner';
 import { ProgressBar } from './components/ProgressBar';
 import { speakWithGemini, speakInstant } from './services/geminiService';
+import { playClickSound, playWinSound, playLoseSound } from './services/soundEffects';
 
 export default function App() {
   // --- LANGUAGE MANAGEMENT ---
@@ -45,9 +46,24 @@ export default function App() {
     setTheme(prev => prev === 'light' ? 'dark' : 'light');
   };
 
+  // SFX Management
+  const [sfxEnabled, setSfxEnabled] = useState(() => {
+    const saved = localStorage.getItem('sfxEnabled');
+    return saved !== null ? JSON.parse(saved) : true;
+  });
+
+  const toggleSfx = () => {
+    setSfxEnabled((prev: boolean) => {
+      const newValue = !prev;
+      localStorage.setItem('sfxEnabled', JSON.stringify(newValue));
+      return newValue;
+    });
+  };
+
   // Menu State
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [resetConfirm, setResetConfirm] = useState(false);
+  const [isAudioLoading, setIsAudioLoading] = useState(false);
 
   // Load initial state from localStorage if available
   const getInitialState = (): GameState => {
@@ -151,6 +167,23 @@ export default function App() {
     return () => document.removeEventListener('fullscreenchange', handler);
   }, []);
 
+  const handleSpeak = async (text: string, lang: 'it' | 'en') => {
+    if (CONFIG.enable_audio) {
+      setIsAudioLoading(true);
+      try {
+        if (lang === 'it') {
+          // Usa Gemini service (che include fallback)
+          await speakWithGemini(text, lang);
+        } else {
+          // Usa browser nativo per inglese
+          speakInstant(text, lang);
+        }
+      } finally {
+        setIsAudioLoading(false);
+      }
+    }
+  };
+
   const selectNewWord = useCallback(() => {
     let availableWords = INITIAL_WORDS.filter(
       (w) =>
@@ -192,30 +225,24 @@ export default function App() {
     const state = stateRef.current;
     if (!state.currentWord || state.gameStatus !== 'playing') return;
     if (state.hintsUsed >= 2) return;
+    
+    if (sfxEnabled) playClickSound();
 
     const newHintLevel = state.hintsUsed + 1;
     let feedbackMsg = '';
     let newGuessedLetters = [...state.guessedLetters];
     
-    // Get translations for current language state (using global t var might be stale in callback, so safer to access directly or use ref if lang changed)
     const currentT = TRANSLATIONS[language]; 
 
     if (newHintLevel === 1) {
-      // Hint 1: Show description or generic category hint
       const categoryName = currentT.categories[state.currentWord.category] || state.currentWord.category;
-      
       if (language === 'it') {
-         // In Italian, prefer the specific hint if available
          feedbackMsg = state.currentWord.hint || `${currentT.hint_intro_generic} ${categoryName}...`;
       } else {
-         // In English, fallback to category hint to ensure understanding, 
-         // unless we want to show Italian hint as a challenge. 
-         // Let's show "It's a [English Category]..." for clarity.
          feedbackMsg = `${currentT.hint_intro_generic} ${categoryName}...`;
       }
 
     } else if (newHintLevel === 2) {
-      // Hint 2: Reveal a random consonant
       const targetWord = state.currentWord.italian.toLowerCase();
       const unrevealedConsonants = targetWord.split('').filter(char => 
         !state.guessedLetters.includes(char) && 
@@ -253,6 +280,8 @@ export default function App() {
     const state = stateRef.current;
     const currentT = TRANSLATIONS[language];
     
+    if (sfxEnabled) playWinSound();
+
     const errors = CONFIG.max_attempts - state.attemptsRemaining;
     let starsEarned = 1;
     if (errors === 0) starsEarned = 3;
@@ -282,8 +311,9 @@ export default function App() {
     }));
 
     if (CONFIG.enable_audio && state.currentWord) {
-      speakInstant(state.currentWord.italian, 'it');
-      setTimeout(() => speakInstant(state.currentWord!.english, 'en'), 1200);
+      handleSpeak(state.currentWord.italian, 'it');
+      // Ritardo per l'inglese leggermente aumentato per non sovrapporsi
+      setTimeout(() => handleSpeak(state.currentWord!.english, 'en'), 1500);
     }
   };
 
@@ -293,8 +323,11 @@ export default function App() {
     if (!state.currentWord || state.gameStatus !== 'playing') return;
     if (state.guessedLetters.includes(letter)) return;
 
+    if (sfxEnabled) playClickSound();
+
     if (CONFIG.enable_audio) {
       const letterName = LETTER_NAMES_ITALIAN[letter] || letter;
+      // Lettere sono brevi, usiamo instant per reattività
       speakInstant(letterName, 'it');
     }
 
@@ -314,6 +347,7 @@ export default function App() {
     if (allLettersGuessed) {
       handleGameWin(newGuessedLetters);
     } else if (nextAttempts <= 0) {
+      if (sfxEnabled) playLoseSound();
       setGameState(prev => ({
         ...prev,
         guessedLetters: newGuessedLetters,
@@ -326,8 +360,8 @@ export default function App() {
       }));
       
       if (CONFIG.enable_audio) {
-        speakInstant(state.currentWord.italian, 'it');
-        setTimeout(() => speakInstant(state.currentWord!.english, 'en'), 1200);
+        handleSpeak(state.currentWord.italian, 'it');
+        setTimeout(() => handleSpeak(state.currentWord!.english, 'en'), 1500);
       }
     } else {
       setGameState(prev => ({
@@ -337,7 +371,7 @@ export default function App() {
         feedback: isCorrect ? TRANSLATIONS[language].feedback_good : TRANSLATIONS[language].feedback_bad
       }));
     }
-  }, [language]); 
+  }, [language, sfxEnabled]); 
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -377,7 +411,7 @@ export default function App() {
     <div className="min-h-screen bg-blue-50 dark:bg-gray-950 pb-12 font-sans selection:bg-blue-200 dark:selection:bg-blue-800 transition-colors duration-300">
       <header className="bg-white dark:bg-gray-900 border-b dark:border-gray-800 shadow-sm sticky top-0 z-20 px-4 py-3 sm:px-6 sm:py-4 flex flex-wrap items-center justify-between gap-y-2 transition-colors duration-300">
         <div className="flex items-center gap-2">
-           <div className="bg-blue-600 dark:bg-blue-700 text-white p-2 rounded-lg shadow-sm">
+           <div className="bg-blue-600 dark:bg-blue-700 text-white p-2 rounded-lg shadow-sm" aria-hidden="true">
              <span className="text-xl">🇮🇹</span>
            </div>
            <div>
@@ -386,17 +420,17 @@ export default function App() {
            </div>
         </div>
         
-        <div className="flex flex-wrap gap-2 sm:gap-4 items-center ml-auto">
+        <nav className="flex flex-wrap gap-2 sm:gap-4 items-center ml-auto" aria-label="Game Stats and Settings">
           {/* Streak Badge */}
           <div className="hidden sm:flex items-center gap-1 bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-300 px-3 py-1.5 rounded-full border border-orange-200 dark:border-orange-800 shadow-sm" title={t.streak_title}>
-             <span className="text-lg">🔥</span>
-             <span className="font-bold text-sm">{gameState.streak}</span>
+             <span className="text-lg" aria-hidden="true">🔥</span>
+             <span className="font-bold text-sm" aria-label={`${gameState.streak} day streak`}>{gameState.streak}</span>
           </div>
 
           {/* Stars Badge */}
           <div className="flex items-center gap-1 bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300 px-3 py-1.5 rounded-full border border-yellow-200 dark:border-yellow-800 shadow-sm" title={t.stars_title}>
-             <span className="text-lg">⭐</span>
-             <span className="font-bold text-sm">{gameState.totalStars}</span>
+             <span className="text-lg" aria-hidden="true">⭐</span>
+             <span className="font-bold text-sm" aria-label={`${gameState.totalStars} total stars`}>{gameState.totalStars}</span>
           </div>
 
           {/* Theme Toggle */}
@@ -404,6 +438,7 @@ export default function App() {
             onClick={toggleTheme}
             className="p-2 bg-gray-50 dark:bg-gray-800 text-gray-500 dark:text-gray-300 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors border border-gray-200 dark:border-gray-700"
             title={theme === 'light' ? t.theme_dark : t.theme_light}
+            aria-label={theme === 'light' ? t.theme_dark : t.theme_light}
           >
              {theme === 'light' ? (
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -420,6 +455,7 @@ export default function App() {
             onClick={toggleFullScreen}
             className="p-2 bg-gray-50 dark:bg-gray-800 text-gray-500 dark:text-gray-300 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors border border-gray-200 dark:border-gray-700"
             title={isFullScreen ? t.fullscreen_off : t.fullscreen_on}
+            aria-label={isFullScreen ? t.fullscreen_off : t.fullscreen_on}
           >
             {isFullScreen ? (
               <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -437,12 +473,13 @@ export default function App() {
             onClick={() => setIsMenuOpen(true)}
             className="p-2 bg-gray-50 dark:bg-gray-800 text-gray-500 dark:text-gray-300 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors border border-gray-200 dark:border-gray-700"
             title={t.menu}
+            aria-label={t.menu}
           >
             <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
             </svg>
           </button>
-        </div>
+        </nav>
       </header>
 
       <main className="max-w-4xl mx-auto mt-6 sm:mt-8 px-4">
@@ -468,11 +505,14 @@ export default function App() {
                 <span>{t.categories[gameState.currentWord?.category || ''] || gameState.currentWord?.category}</span>
               </div>
               
-              <div className={`${wordFontSizeClass} font-mono font-bold tracking-[0.15em] text-gray-800 dark:text-white w-full transition-colors whitespace-nowrap`}>
+              <div 
+                className={`${wordFontSizeClass} font-mono font-bold tracking-[0.15em] text-gray-800 dark:text-white w-full transition-colors whitespace-nowrap`}
+                aria-label={`Current word: ${displayWord}`}
+              >
                 {displayWord}
               </div>
 
-              <div className="h-12 flex items-center justify-center w-full">
+              <div className="h-12 flex items-center justify-center w-full" aria-live="polite">
                 <div className={`text-lg sm:text-xl font-bold transition-all px-4 py-1 rounded-lg ${
                    gameState.feedback.includes('Bravissimo') || gameState.feedback.includes('Great') || gameState.feedback.includes('Ottimo') ? 'text-green-600 dark:text-green-300 bg-green-50 dark:bg-green-900/50' : 
                    gameState.feedback.includes('Riprova') || gameState.feedback.includes('Try') ? 'text-red-500 dark:text-red-300 bg-red-50 dark:bg-red-900/50' :
@@ -527,7 +567,7 @@ export default function App() {
         <AdBanner label={t.ad_label} />
 
         {(gameState.gameStatus === 'won' || gameState.gameStatus === 'lost') && (
-          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-in fade-in duration-300">
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-in fade-in duration-300" role="dialog" aria-labelledby="modal-title">
             <div className="bg-white dark:bg-gray-900 rounded-3xl p-6 sm:p-8 max-w-sm w-full text-center shadow-2xl scale-100 animate-in zoom-in-95 duration-300 relative overflow-hidden transition-colors">
               
               {/* Confetti Background for Win */}
@@ -544,7 +584,7 @@ export default function App() {
                 {gameState.gameStatus === 'won' ? '🏆' : '😿'}
               </div>
               
-              <h2 className={`text-4xl font-title mb-2 ${gameState.gameStatus === 'won' ? 'text-green-600 dark:text-green-400' : 'text-orange-600 dark:text-orange-400'}`}>
+              <h2 id="modal-title" className={`text-4xl font-title mb-2 ${gameState.gameStatus === 'won' ? 'text-green-600 dark:text-green-400' : 'text-orange-600 dark:text-orange-400'}`}>
                 {gameState.gameStatus === 'won' ? t.win_title : t.lose_title}
               </h2>
               
@@ -565,10 +605,21 @@ export default function App() {
               <div className="bg-blue-50 dark:bg-gray-800 rounded-2xl p-4 my-6 border border-blue-100 dark:border-gray-700 relative transition-colors">
                 <div className="flex items-center justify-between mb-1">
                   <span className="text-xs text-blue-400 dark:text-blue-300 uppercase font-bold tracking-wider">{t.italian_label}</span>
-                  <button onClick={() => speakWithGemini(gameState.currentWord!.italian, 'it')} className="p-1 hover:bg-blue-100 dark:hover:bg-gray-700 rounded-full text-blue-500 dark:text-blue-300 transition-colors">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" viewBox="0 0 20 20" fill="currentColor">
-                      <path fillRule="evenodd" d="M9.383 3.076A1 1 0 0110 4v12a1 1 0 01-1.707.707L4.586 13H2a1 1 0 01-1-1V8a1 1 0 011-1h2.586l3.707-3.707a1 1 0 011.09-.217zM14.657 2.929a1 1 0 011.414 0A9.972 9.972 0 0119 10a9.972 9.972 0 01-2.929 7.071 1 1 0 01-1.414-1.414A7.971 7.971 0 0017 10c0-2.21-.894-4.208-2.343-5.657a1 1 0 010-1.414zm-2.829 2.828a1 1 0 011.415 0A5.983 5.983 0 0115 10a5.983 5.983 0 01-1.757 4.243 1 1 0 01-1.415-1.415A3.984 3.984 0 0013 10a3.984 3.984 0 00-1.172-2.828 1 1 0 010-1.415z" clipRule="evenodd" />
-                    </svg>
+                  <button 
+                    onClick={() => handleSpeak(gameState.currentWord!.italian, 'it')} 
+                    className={`p-1 hover:bg-blue-100 dark:hover:bg-gray-700 rounded-full text-blue-500 dark:text-blue-300 transition-colors ${isAudioLoading ? 'opacity-50 cursor-wait' : ''}`}
+                    disabled={isAudioLoading}
+                  >
+                    {isAudioLoading ? (
+                      <svg className="animate-spin h-6 w-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                    ) : (
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" viewBox="0 0 20 20" fill="currentColor">
+                        <path fillRule="evenodd" d="M9.383 3.076A1 1 0 0110 4v12a1 1 0 01-1.707.707L4.586 13H2a1 1 0 01-1-1V8a1 1 0 011-1h2.586l3.707-3.707a1 1 0 011.09-.217zM14.657 2.929a1 1 0 011.414 0A9.972 9.972 0 0119 10a9.972 9.972 0 01-2.929 7.071 1 1 0 01-1.414-1.414A7.971 7.971 0 0017 10c0-2.21-.894-4.208-2.343-5.657a1 1 0 010-1.414zm-2.829 2.828a1 1 0 011.415 0A5.983 5.983 0 0115 10a5.983 5.983 0 01-1.757 4.243 1 1 0 01-1.415-1.415A3.984 3.984 0 0013 10a3.984 3.984 0 00-1.172-2.828 1 1 0 010-1.415z" clipRule="evenodd" />
+                      </svg>
+                    )}
                   </button>
                 </div>
                 <div className="text-3xl font-bold text-gray-800 dark:text-white mb-3 uppercase tracking-widest transition-colors">
@@ -604,11 +655,11 @@ export default function App() {
 
       {/* Menu Modal */}
       {isMenuOpen && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in">
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in" role="dialog" aria-labelledby="menu-title">
           <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-xl max-w-sm w-full p-6 border border-gray-100 dark:border-gray-800">
             <div className="flex justify-between items-center mb-6">
-              <h2 className="text-xl font-bold text-gray-800 dark:text-white">{t.menu}</h2>
-              <button onClick={() => {setIsMenuOpen(false); setResetConfirm(false);}} className="p-1 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg text-gray-500">
+              <h2 id="menu-title" className="text-xl font-bold text-gray-800 dark:text-white">{t.menu}</h2>
+              <button onClick={() => {setIsMenuOpen(false); setResetConfirm(false);}} className="p-1 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg text-gray-500" aria-label="Close menu">
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                 </svg>
@@ -617,9 +668,10 @@ export default function App() {
 
             <div className="space-y-4">
               {/* Language Selector in Menu */}
-              <div className="grid grid-cols-2 gap-2 p-1 bg-gray-100 dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700">
+              <div className="grid grid-cols-2 gap-2 p-1 bg-gray-100 dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700" role="group" aria-label="Language selection">
                 <button 
                   onClick={() => changeLanguage('it')} 
+                  aria-pressed={language === 'it'}
                   className={`py-2 rounded-lg text-sm font-bold transition-all flex items-center justify-center gap-2 ${language === 'it' ? 'bg-white dark:bg-gray-600 shadow-sm text-blue-600 dark:text-blue-300' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'}`}
                 >
                   <span className="text-base">🇮🇹</span>
@@ -627,11 +679,28 @@ export default function App() {
                 </button>
                 <button 
                   onClick={() => changeLanguage('en')} 
+                  aria-pressed={language === 'en'}
                   className={`py-2 rounded-lg text-sm font-bold transition-all flex items-center justify-center gap-2 ${language === 'en' ? 'bg-white dark:bg-gray-600 shadow-sm text-blue-600 dark:text-blue-300' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'}`}
                 >
                   <span className="text-base">🇬🇧</span>
                   <span>{t.english_label}</span>
                 </button>
+              </div>
+
+              {/* Settings Group */}
+              <div className="bg-gray-100 dark:bg-gray-800 rounded-xl p-3 border border-gray-200 dark:border-gray-700">
+                <h3 className="font-bold text-gray-700 dark:text-gray-200 mb-2 text-xs uppercase tracking-wide px-1">{t.settings}</h3>
+                <div className="flex items-center justify-between px-1">
+                  <span className="text-gray-700 dark:text-gray-300 font-medium text-sm">{t.sfx_label}</span>
+                  <button 
+                    onClick={toggleSfx}
+                    role="switch"
+                    aria-checked={sfxEnabled}
+                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:focus:ring-offset-gray-900 ${sfxEnabled ? 'bg-blue-600' : 'bg-gray-300 dark:bg-gray-600'}`}
+                  >
+                    <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${sfxEnabled ? 'translate-x-6' : 'translate-x-1'}`} />
+                  </button>
+                </div>
               </div>
 
               {!resetConfirm ? (
@@ -645,7 +714,7 @@ export default function App() {
                   {t.reset_btn}
                 </button>
               ) : (
-                <div className="bg-red-50 dark:bg-red-900/20 p-4 rounded-xl border border-red-100 dark:border-red-900/50">
+                <div className="bg-red-50 dark:bg-red-900/20 p-4 rounded-xl border border-red-100 dark:border-red-900/50" role="alert">
                   <p className="text-red-800 dark:text-red-200 font-medium text-center mb-3">{t.reset_confirm}</p>
                   <div className="flex gap-2">
                     <button 
@@ -677,11 +746,11 @@ export default function App() {
                     </div>
                     <div>
                         <p className="text-gray-500 dark:text-gray-400">{t.stats_stars}</p>
-                        <p className="font-bold text-yellow-500 flex items-center gap-1">{gameState.totalStars} <span>⭐</span></p>
+                        <p className="font-bold text-yellow-500 flex items-center gap-1">{gameState.totalStars} <span aria-hidden="true">⭐</span></p>
                     </div>
                     <div>
                         <p className="text-gray-500 dark:text-gray-400">{t.stats_streak}</p>
-                        <p className="font-bold text-orange-500 flex items-center gap-1">{gameState.streak} <span>🔥</span></p>
+                        <p className="font-bold text-orange-500 flex items-center gap-1">{gameState.streak} <span aria-hidden="true">🔥</span></p>
                     </div>
                  </div>
               </div>

@@ -1,3 +1,4 @@
+
 import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
 
@@ -8,8 +9,14 @@ export default defineConfig(({ mode }) => {
   return {
     plugins: [react()],
     define: {
-      // Stringify the API key to inject it into the code at build/runtime.
-      // Fallback to empty string to prevent build errors if env is missing.
+      // SECURITY WARNING: 
+      // This injects the API KEY into the client-side bundle. 
+      // To secure your key, you MUST restrict it in the Google Cloud Console:
+      // 1. Go to APIs & Services > Credentials
+      // 2. Click your API Key
+      // 3. Set "Application restrictions" to "HTTP referrers (web sites)"
+      // 4. Add your domain (e.g., https://hangman.giacomel.info/* and http://localhost:8080/*)
+      // If you do not do this, your key can be stolen and quota drained.
       'process.env.API_KEY': JSON.stringify(env.API_KEY || '')
     },
     server: {

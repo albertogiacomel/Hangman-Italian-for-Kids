@@ -3,9 +3,6 @@
 
 A modern, interactive Hangman game designed to help users learn Italian vocabulary. Built with React, Tailwind CSS, and Google Gemini API for high-quality pronunciation.
 
-![Italian Hangman Screenshot](https://via.placeholder.com/800x450?text=Italian+Hangman+Screenshot)
-*(Replace this link with a real screenshot of your application)*
-
 ## ✨ Features
 
 - **Gamified Learning**: Guess words across 3 difficulty levels (Easy, Medium, Hard).
