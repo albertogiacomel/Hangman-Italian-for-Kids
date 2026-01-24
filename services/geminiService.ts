@@ -1,6 +1,8 @@
 
 import { GoogleGenAI, Modality } from "@google/genai";
 
+// --- UTILITIES AUDIO ---
+
 const decode = (base64: string) => {
   const binaryString = atob(base64);
   const len = binaryString.length;
@@ -12,12 +14,21 @@ const decode = (base64: string) => {
 };
 
 const decodeAudioData = async (
-  data: Uint8Array,
+  data: Uint8Array | ArrayBuffer,
   ctx: AudioContext,
   sampleRate: number,
   numChannels: number,
 ): Promise<AudioBuffer> => {
-  const dataInt16 = new Int16Array(data.buffer);
+  // Se è già un ArrayBuffer, usalo, altrimenti prendi il buffer dalla Uint8Array
+  const bufferToDecode = data instanceof Uint8Array ? data.buffer : data;
+  
+  // Nota: decodeAudioData nativo è preferibile per file completi, 
+  // ma per raw PCM (come quello di Gemini Live/TTS a volte) serve la decodifica manuale o corretta.
+  // Qui assumiamo che Gemini restituisca un formato decodificabile o PCM raw.
+  // Tuttavia, nel codice originale si usava una decodifica manuale per PCM 24kHz.
+  // Manteniamo la logica originale PCM int16 -> float32 per coerenza.
+
+  const dataInt16 = new Int16Array(bufferToDecode);
   const frameCount = dataInt16.length / numChannels;
   const buffer = ctx.createBuffer(numChannels, frameCount, sampleRate);
 
@@ -30,16 +41,74 @@ const decodeAudioData = async (
   return buffer;
 };
 
+// --- INDEXED DB HELPER (PERSISTENT CACHE) ---
+const DB_NAME = 'hangman_audio_db';
+const STORE_NAME = 'audio_files';
+const DB_VERSION = 1;
+
+const openDB = (): Promise<IDBDatabase> => {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(DB_NAME, DB_VERSION);
+    request.onupgradeneeded = (event) => {
+      const db = (event.target as IDBOpenDBRequest).result;
+      if (!db.objectStoreNames.contains(STORE_NAME)) {
+        db.createObjectStore(STORE_NAME);
+      }
+    };
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+};
+
+const getAudioFromDB = async (key: string): Promise<ArrayBuffer | undefined> => {
+  try {
+    const db = await openDB();
+    return new Promise((resolve, reject) => {
+      const transaction = db.transaction(STORE_NAME, 'readonly');
+      const store = transaction.objectStore(STORE_NAME);
+      const request = store.get(key);
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+  } catch (e) {
+    console.warn("DB Read Error", e);
+    return undefined;
+  }
+};
+
+const saveAudioToDB = async (key: string, data: ArrayBuffer) => {
+  try {
+    const db = await openDB();
+    const transaction = db.transaction(STORE_NAME, 'readwrite');
+    const store = transaction.objectStore(STORE_NAME);
+    store.put(data, key);
+  } catch (e) {
+    console.warn("DB Write Error", e);
+  }
+};
+
+// --- MAIN SERVICE ---
+
 // Singleton AudioContext
 let sharedAudioCtx: AudioContext | null = null;
-// Simple In-Memory Cache: Key = "lang:text" -> Value = AudioBuffer
-const audioCache = new Map<string, AudioBuffer>();
+// Simple In-Memory Cache (for speed within same session before DB hit)
+const memoryCache = new Map<string, AudioBuffer>();
 
 export const speakWithGemini = async (text: string, language: 'it' | 'en' = 'it') => {
-  const apiKey = process.env.API_KEY;
-  if (!apiKey) return;
+  // 1. OTTIMIZZAZIONE: Usa il TTS del browser per l'Inglese.
+  // Gemini costa risorse, il browser è gratis e perfetto per l'inglese.
+  if (language === 'en') {
+    speakInstant(text, language);
+    return;
+  }
 
-  // Inizializza o riprendi l'AudioContext
+  const apiKey = process.env.API_KEY;
+  if (!apiKey) {
+    speakInstant(text, language);
+    return;
+  }
+
+  // Inizializza AudioContext
   if (!sharedAudioCtx) {
     sharedAudioCtx = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
   }
@@ -49,19 +118,25 @@ export const speakWithGemini = async (text: string, language: 'it' | 'en' = 'it'
 
   const cacheKey = `${language}:${text.toLowerCase()}`;
   
-  // Check Cache
-  if (audioCache.has(cacheKey)) {
-    const audioBuffer = audioCache.get(cacheKey)!;
+  // 2. CHECK MEMORY CACHE
+  if (memoryCache.has(cacheKey)) {
+    playBuffer(memoryCache.get(cacheKey)!, sharedAudioCtx);
+    return;
+  }
+
+  // 3. CHECK PERSISTENT DB CACHE (IndexedDB)
+  const cachedArrayBuffer = await getAudioFromDB(cacheKey);
+  if (cachedArrayBuffer && sharedAudioCtx) {
+    const audioBuffer = await decodeAudioData(cachedArrayBuffer, sharedAudioCtx, 24000, 1);
+    memoryCache.set(cacheKey, audioBuffer); // Promuovi in memoria
     playBuffer(audioBuffer, sharedAudioCtx);
     return;
   }
 
+  // 4. CALL GEMINI API (Solo se non in cache)
   const ai = new GoogleGenAI({ apiKey });
-  const prompt = language === 'it' 
-    ? `Dì con voce molto chiara e amichevole: ${text}` 
-    : `Say clearly: ${text}`;
-  
-  const voiceName = language === 'it' ? 'Kore' : 'Puck';
+  const prompt = `Dì con voce molto chiara e amichevole: ${text}`;
+  const voiceName = 'Kore'; // Usiamo Kore per l'italiano
 
   try {
     const response = await ai.models.generateContent({
@@ -79,15 +154,23 @@ export const speakWithGemini = async (text: string, language: 'it' | 'en' = 'it'
 
     const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
     if (base64Audio && sharedAudioCtx) {
-      const audioBuffer = await decodeAudioData(decode(base64Audio), sharedAudioCtx, 24000, 1);
+      // Decode base64 to Uint8Array
+      const rawBytes = decode(base64Audio);
       
-      // Save to Cache
-      audioCache.set(cacheKey, audioBuffer);
+      // Save raw PCM bytes to DB (persistente)
+      saveAudioToDB(cacheKey, rawBytes.buffer);
+
+      // Decode to AudioBuffer for playback
+      const audioBuffer = await decodeAudioData(rawBytes, sharedAudioCtx, 24000, 1);
+      
+      // Save to Memory Cache
+      memoryCache.set(cacheKey, audioBuffer);
       
       playBuffer(audioBuffer, sharedAudioCtx);
     }
   } catch (error) {
     console.error("Gemini TTS Error:", error);
+    // Fallback in case of API error or Quota Exceeded
     speakInstant(text, language);
   }
 };
@@ -99,10 +182,19 @@ const playBuffer = (buffer: AudioBuffer, ctx: AudioContext) => {
   source.start();
 };
 
-// Funzione per feedback immediato senza latenza di rete
+// Funzione per feedback immediato senza latenza di rete (Browser Native)
 export const speakInstant = (text: string, language: 'it' | 'en' = 'it') => {
   const utter = new SpeechSynthesisUtterance(text);
   utter.lang = language === 'it' ? 'it-IT' : 'en-US';
+  
+  // Cerchiamo una voce Google/Microsoft se disponibile per qualità migliore
+  const voices = window.speechSynthesis.getVoices();
+  const preferredVoice = voices.find(v => 
+    v.lang.startsWith(language === 'it' ? 'it' : 'en') && 
+    (v.name.includes('Google') || v.name.includes('Premium'))
+  );
+  if (preferredVoice) utter.voice = preferredVoice;
+
   utter.rate = 0.9; // Leggermente più lento per chiarezza didattica
   window.speechSynthesis.cancel(); 
   window.speechSynthesis.speak(utter);
