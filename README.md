@@ -1,20 +1,66 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
 
-# Run and deploy your AI Studio app
+# Italian Hangman 🇮🇹
 
-This contains everything you need to run your app locally.
+A modern, interactive Hangman game designed to help users learn Italian vocabulary. Built with React, Tailwind CSS, and Google Gemini API for high-quality pronunciation.
 
-View your app in AI Studio: https://ai.studio/apps/drive/1S2asJxs0Uqe7pvdAVV5Sfa2nZEJqCSyw
+![Italian Hangman Screenshot](https://via.placeholder.com/800x450?text=Italian+Hangman+Screenshot)
+*(Replace this link with a real screenshot of your application)*
 
-## Run Locally
+## ✨ Features
 
-**Prerequisites:**  Node.js
+- **Gamified Learning**: Guess words across 3 difficulty levels (Easy, Medium, Hard).
+- **Categories**: Learn words contextually (Animals, Food, Colors, Transport, etc.).
+- **Smart Hints**: 
+  - *Hint 1*: Contextual description.
+  - *Hint 2*: Reveal a letter.
+- **Audio Pronunciation**: Integration with **Google Gemini TTS** for authentic Italian pronunciation.
+- **Multi-language Interface**: Full UI support for **Italian** and **English**.
+- **Dark Mode**: Fully supported dark theme for comfortable night learning.
+- **Progress Tracking**: Streaks, stars, and level progression saved locally.
 
+## 🛠️ Tech Stack
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+- **Frontend**: React 18, TypeScript, Vite
+- **Styling**: Tailwind CSS
+- **AI**: Google Gemini API (`@google/genai`) for Text-to-Speech.
+- **State**: LocalStorage for persistence.
+
+## 🚀 Installation & Setup
+
+1. **Clone the repository**
+   ```bash
+   git clone https://github.com/yourusername/italian-hangman.git
+   cd italian-hangman
+   ```
+
+2. **Install dependencies**
+   ```bash
+   npm install
+   ```
+
+3. **Configure Environment**
+   Create a `.env` file in the root directory and add your Gemini API Key:
+   ```env
+   API_KEY=your_google_gemini_api_key_here
+   ```
+
+4. **Run the development server**
+   ```bash
+   npm run dev
+   ```
+
+5. **Build for production**
+   ```bash
+   npm run build
+   ```
+
+## 🎮 How to Play
+
+1. Use the physical keyboard or the on-screen virtual keyboard to guess letters.
+2. You have 6 attempts ("hearts") to guess the word.
+3. Use the "Hint" button if you get stuck.
+4. Listen to the pronunciation after winning or losing to improve your Italian skills!
+
+## 📄 License
+
+This project is open-source and available under the MIT License.

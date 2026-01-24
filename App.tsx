@@ -1,42 +1,28 @@
 
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { Word, GameState, CategoryEmoji, Config, LETTER_NAMES_ITALIAN } from './types';
-import { INITIAL_WORDS, ITALIAN_ALPHABET } from './constants';
+import { Word, GameState, CategoryEmoji, LETTER_NAMES_ITALIAN, Language } from './types';
+import { INITIAL_WORDS, ITALIAN_ALPHABET, CONFIG } from './constants';
+import { TRANSLATIONS } from './translations';
 import { HangmanVisual } from './components/HangmanVisual';
 import { Keyboard } from './components/Keyboard';
 import { AdBanner } from './components/AdBanner';
 import { ProgressBar } from './components/ProgressBar';
 import { speakWithGemini, speakInstant } from './services/geminiService';
 
-const CONFIG: Config = {
-  words_per_difficulty_level: 5,
-  max_attempts: 6,
-  enable_audio: true,
-};
-
-// Canvas confetti utility embedded to avoid external dependencies issues
-const triggerConfetti = () => {
-  const duration = 3000;
-  const animationEnd = Date.now() + duration;
-  const colors = ['#EF4444', '#3B82F6', '#10B981', '#F59E0B', '#8B5CF6'];
-
-  const randomInRange = (min: number, max: number) => Math.random() * (max - min) + min;
-
-  (function frame() {
-    const timeLeft = animationEnd - Date.now();
-    if (timeLeft <= 0) return;
-
-    const particleCount = 50 * (timeLeft / duration);
-    
-    // Create particles (simple simulation using DOM would be safer for React, 
-    // but here we just rely on visual feedback if this advanced animation isn't available.
-    // Ideally we'd use 'canvas-confetti' npm package. 
-    // Since we can't easily add packages in this environment without risk, 
-    // we will skip the complex canvas implementation and rely on CSS animations in the modal).
-  }());
-};
-
 export default function App() {
+  // --- LANGUAGE MANAGEMENT ---
+  const [language, setLanguage] = useState<Language>(() => {
+    const saved = localStorage.getItem('appLanguage');
+    return (saved === 'it' || saved === 'en') ? saved : 'it';
+  });
+
+  const t = TRANSLATIONS[language];
+
+  const changeLanguage = (lang: Language) => {
+    setLanguage(lang);
+    localStorage.setItem('appLanguage', lang);
+  };
+
   // Theme Management
   const [theme, setTheme] = useState(() => {
     if (localStorage.getItem('theme')) {
@@ -69,7 +55,6 @@ export default function App() {
       const saved = localStorage.getItem('italianHangmanState');
       if (saved) {
         const parsed = JSON.parse(saved);
-        // Ensure we merge with default to handle schema changes
         return {
           currentWord: null,
           currentDifficulty: parsed.currentDifficulty || 'easy',
@@ -109,7 +94,6 @@ export default function App() {
 
   const [gameState, setGameState] = useState<GameState>(getInitialState);
   const [isFullScreen, setIsFullScreen] = useState(false);
-
   const stateRef = useRef(gameState);
   
   // Persist state changes
@@ -175,22 +159,16 @@ export default function App() {
     );
 
     if (availableWords.length === 0) {
-      // If we ran out of words for this level, reset attempted list for this level to allow replay
-      // Or move to next level.
       let nextDiff = stateRef.current.currentDifficulty;
       if (nextDiff === 'easy') nextDiff = 'medium';
       else if (nextDiff === 'medium') nextDiff = 'hard';
-      else nextDiff = 'easy'; // Loop back or stay on hard? Let's loop for endless play.
+      else nextDiff = 'easy';
 
-      // Check if we have words in next diff
       const nextWords = INITIAL_WORDS.filter((w) => w.difficulty === nextDiff);
-      
-      // If we are changing level, we can clear attempted words for the NEW level to ensure content
       const attemptedInNext = stateRef.current.wordsAttempted; 
-      
       availableWords = nextWords.filter(w => !attemptedInNext.includes(w.italian));
+      
       if (availableWords.length === 0) {
-         // Reset completely if truly everything is exhausted (edge case)
          availableWords = nextWords;
       }
       
@@ -218,10 +196,24 @@ export default function App() {
     const newHintLevel = state.hintsUsed + 1;
     let feedbackMsg = '';
     let newGuessedLetters = [...state.guessedLetters];
+    
+    // Get translations for current language state (using global t var might be stale in callback, so safer to access directly or use ref if lang changed)
+    const currentT = TRANSLATIONS[language]; 
 
     if (newHintLevel === 1) {
-      // Hint 1: Show description
-      feedbackMsg = state.currentWord.hint || `È un ${state.currentWord.category}...`;
+      // Hint 1: Show description or generic category hint
+      const categoryName = currentT.categories[state.currentWord.category] || state.currentWord.category;
+      
+      if (language === 'it') {
+         // In Italian, prefer the specific hint if available
+         feedbackMsg = state.currentWord.hint || `${currentT.hint_intro_generic} ${categoryName}...`;
+      } else {
+         // In English, fallback to category hint to ensure understanding, 
+         // unless we want to show Italian hint as a challenge. 
+         // Let's show "It's a [English Category]..." for clarity.
+         feedbackMsg = `${currentT.hint_intro_generic} ${categoryName}...`;
+      }
+
     } else if (newHintLevel === 2) {
       // Hint 2: Reveal a random consonant
       const targetWord = state.currentWord.italian.toLowerCase();
@@ -234,9 +226,8 @@ export default function App() {
       if (unrevealedConsonants.length > 0) {
         const randomConsonant = unrevealedConsonants[Math.floor(Math.random() * unrevealedConsonants.length)];
         newGuessedLetters.push(randomConsonant);
-        feedbackMsg = `Ecco una lettera per te: ${randomConsonant.toUpperCase()}`;
+        feedbackMsg = `${currentT.hint_intro_letter}: ${randomConsonant.toUpperCase()}`;
         
-        // Check if revealing this letter wins the game
         const allLettersGuessed = targetWord
           .split('')
           .every((char) => newGuessedLetters.includes(char) || char === ' ' || char === '-');
@@ -246,8 +237,7 @@ export default function App() {
            return;
         }
       } else {
-        // Fallback if no consonants left (rare)
-        feedbackMsg = "Non ci sono consonanti da rivelare!";
+        feedbackMsg = currentT.hint_no_consonants;
       }
     }
 
@@ -261,11 +251,8 @@ export default function App() {
 
   const handleGameWin = (finalGuessedLetters: string[]) => {
     const state = stateRef.current;
+    const currentT = TRANSLATIONS[language];
     
-    // Calculate Stars
-    // 0 errors = 3 stars
-    // 1-2 errors = 2 stars
-    // 3+ errors = 1 star
     const errors = CONFIG.max_attempts - state.attemptsRemaining;
     let starsEarned = 1;
     if (errors === 0) starsEarned = 3;
@@ -275,12 +262,9 @@ export default function App() {
     newDiffProgress[state.currentDifficulty] += 1;
 
     let nextDifficulty = state.currentDifficulty;
-    // Advance difficulty if we hit the threshold
     if (newDiffProgress[state.currentDifficulty] >= CONFIG.words_per_difficulty_level) {
       if (state.currentDifficulty === 'easy') nextDifficulty = 'medium';
       else if (state.currentDifficulty === 'medium') nextDifficulty = 'hard';
-      // Reset progress for the old difficulty to allow looping later? 
-      // For now we just keep counting up.
     }
 
     setGameState(prev => ({
@@ -292,7 +276,7 @@ export default function App() {
       wordsAttempted: [...prev.wordsAttempted, prev.currentWord!.italian],
       difficultyProgress: newDiffProgress,
       currentDifficulty: nextDifficulty,
-      feedback: 'Bravissimo! 🎉',
+      feedback: `${currentT.win_msg} 🎉`,
       streak: prev.streak + 1,
       totalStars: prev.totalStars + starsEarned
     }));
@@ -305,6 +289,7 @@ export default function App() {
 
   const handleLetterGuess = useCallback((letter: string) => {
     const state = stateRef.current;
+    
     if (!state.currentWord || state.gameStatus !== 'playing') return;
     if (state.guessedLetters.includes(letter)) return;
 
@@ -336,8 +321,8 @@ export default function App() {
         gameStatus: 'lost',
         wordsCompleted: prev.wordsCompleted + 1,
         wordsAttempted: [...prev.wordsAttempted, prev.currentWord!.italian],
-        feedback: 'Riprova! 😢',
-        streak: 0 // Reset streak on loss
+        feedback: TRANSLATIONS[language].feedback_try_again,
+        streak: 0
       }));
       
       if (CONFIG.enable_audio) {
@@ -349,10 +334,10 @@ export default function App() {
         ...prev,
         guessedLetters: newGuessedLetters,
         attemptsRemaining: nextAttempts,
-        feedback: isCorrect ? 'Ottimo!' : 'Oops!'
+        feedback: isCorrect ? TRANSLATIONS[language].feedback_good : TRANSLATIONS[language].feedback_bad
       }));
     }
-  }, []);
+  }, [language]); 
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -379,6 +364,15 @@ export default function App() {
     ).join(' ');
   }, [gameState.currentWord, gameState.guessedLetters]);
 
+  // Determine dynamic font size based on word length
+  const wordLen = gameState.currentWord?.italian.length || 0;
+  let wordFontSizeClass = "text-4xl sm:text-5xl md:text-6xl";
+  if (wordLen > 10) {
+    wordFontSizeClass = "text-lg sm:text-3xl md:text-4xl";
+  } else if (wordLen > 7) {
+    wordFontSizeClass = "text-2xl sm:text-4xl md:text-5xl";
+  }
+
   return (
     <div className="min-h-screen bg-blue-50 dark:bg-gray-950 pb-12 font-sans selection:bg-blue-200 dark:selection:bg-blue-800 transition-colors duration-300">
       <header className="bg-white dark:bg-gray-900 border-b dark:border-gray-800 shadow-sm sticky top-0 z-20 px-4 py-3 sm:px-6 sm:py-4 flex flex-wrap items-center justify-between gap-y-2 transition-colors duration-300">
@@ -388,32 +382,28 @@ export default function App() {
            </div>
            <div>
              <h1 className="text-xl sm:text-2xl font-title text-blue-800 dark:text-blue-400 leading-none">Hangman</h1>
-             <p className="text-xs text-blue-400 dark:text-blue-300 font-bold tracking-wider uppercase">Impara l'italiano</p>
+             <p className="text-xs text-blue-400 dark:text-blue-300 font-bold tracking-wider uppercase">{t.subtitle}</p>
            </div>
         </div>
         
         <div className="flex flex-wrap gap-2 sm:gap-4 items-center ml-auto">
           {/* Streak Badge */}
-          <div className="flex items-center gap-1 bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-300 px-3 py-1.5 rounded-full border border-orange-200 dark:border-orange-800 shadow-sm" title="Giorni consecutivi">
+          <div className="hidden sm:flex items-center gap-1 bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-300 px-3 py-1.5 rounded-full border border-orange-200 dark:border-orange-800 shadow-sm" title={t.streak_title}>
              <span className="text-lg">🔥</span>
              <span className="font-bold text-sm">{gameState.streak}</span>
           </div>
 
           {/* Stars Badge */}
-          <div className="flex items-center gap-1 bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300 px-3 py-1.5 rounded-full border border-yellow-200 dark:border-yellow-800 shadow-sm" title="Stelle totali">
+          <div className="flex items-center gap-1 bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300 px-3 py-1.5 rounded-full border border-yellow-200 dark:border-yellow-800 shadow-sm" title={t.stars_title}>
              <span className="text-lg">⭐</span>
              <span className="font-bold text-sm">{gameState.totalStars}</span>
-          </div>
-
-          <div className="hidden sm:flex text-sm font-bold bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 px-3 py-1.5 rounded-full uppercase border border-purple-200 dark:border-purple-800">
-            {gameState.currentDifficulty}
           </div>
 
           {/* Theme Toggle */}
           <button 
             onClick={toggleTheme}
             className="p-2 bg-gray-50 dark:bg-gray-800 text-gray-500 dark:text-gray-300 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors border border-gray-200 dark:border-gray-700"
-            title={theme === 'light' ? "Passa alla modalità scura" : "Passa alla modalità chiara"}
+            title={theme === 'light' ? t.theme_dark : t.theme_light}
           >
              {theme === 'light' ? (
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -429,7 +419,7 @@ export default function App() {
           <button 
             onClick={toggleFullScreen}
             className="p-2 bg-gray-50 dark:bg-gray-800 text-gray-500 dark:text-gray-300 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors border border-gray-200 dark:border-gray-700"
-            title={isFullScreen ? "Esci da Schermo Intero" : "Attiva Schermo Intero"}
+            title={isFullScreen ? t.fullscreen_off : t.fullscreen_on}
           >
             {isFullScreen ? (
               <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -446,7 +436,7 @@ export default function App() {
           <button 
             onClick={() => setIsMenuOpen(true)}
             className="p-2 bg-gray-50 dark:bg-gray-800 text-gray-500 dark:text-gray-300 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors border border-gray-200 dark:border-gray-700"
-            title="Menu"
+            title={t.menu}
           >
             <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
@@ -461,7 +451,7 @@ export default function App() {
           <ProgressBar 
             current={gameState.difficultyProgress[gameState.currentDifficulty] % CONFIG.words_per_difficulty_level} 
             max={CONFIG.words_per_difficulty_level} 
-            label={`Livello ${gameState.currentDifficulty}`}
+            label={`${t.level} ${gameState.currentDifficulty}`}
           />
         </div>
 
@@ -475,17 +465,17 @@ export default function App() {
             <div className="w-full md:w-2/3 flex flex-col items-center gap-4">
               <div className="flex items-center gap-2 px-4 py-2 bg-gray-50 dark:bg-gray-800 rounded-full border border-gray-100 dark:border-gray-700 text-gray-500 dark:text-gray-300 uppercase tracking-widest text-xs font-bold transition-colors">
                 <span className="text-lg">{CategoryEmoji[gameState.currentWord?.category as keyof typeof CategoryEmoji] || '🏷️'}</span>
-                <span>{gameState.currentWord?.category}</span>
+                <span>{t.categories[gameState.currentWord?.category || ''] || gameState.currentWord?.category}</span>
               </div>
               
-              <div className="text-4xl sm:text-5xl md:text-6xl font-mono font-bold tracking-[0.15em] text-gray-800 dark:text-white break-words w-full transition-colors">
+              <div className={`${wordFontSizeClass} font-mono font-bold tracking-[0.15em] text-gray-800 dark:text-white w-full transition-colors whitespace-nowrap`}>
                 {displayWord}
               </div>
 
               <div className="h-12 flex items-center justify-center w-full">
                 <div className={`text-lg sm:text-xl font-bold transition-all px-4 py-1 rounded-lg ${
-                   gameState.feedback.includes('Bravissimo') ? 'text-green-600 dark:text-green-300 bg-green-50 dark:bg-green-900/50' : 
-                   gameState.feedback.includes('Riprova') ? 'text-red-500 dark:text-red-300 bg-red-50 dark:bg-red-900/50' :
+                   gameState.feedback.includes('Bravissimo') || gameState.feedback.includes('Great') || gameState.feedback.includes('Ottimo') ? 'text-green-600 dark:text-green-300 bg-green-50 dark:bg-green-900/50' : 
+                   gameState.feedback.includes('Riprova') || gameState.feedback.includes('Try') ? 'text-red-500 dark:text-red-300 bg-red-50 dark:bg-red-900/50' :
                    gameState.feedback ? 'text-blue-600 dark:text-blue-300 bg-blue-50 dark:bg-blue-900/50' : ''
                 }`}>
                   {gameState.feedback}
@@ -507,7 +497,7 @@ export default function App() {
                   <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
                     <path d="M11 3a1 1 0 10-2 0v1a1 1 0 102 0V3zM15.657 5.757a1 1 0 00-1.414-1.414l-.707.707a1 1 0 001.414 1.414l.707-.707zM18 10a1 1 0 01-1 1h-1a1 1 0 110-2h1a1 1 0 011 1zM5.05 6.464A1 1 0 106.464 5.05l-.707-.707a1 1 0 00-1.414 1.414l.707.707zM5 10a1 1 0 01-1 1H3a1 1 0 110-2h1a1 1 0 011 1zM8 16v-1h4v1a2 2 0 11-4 0zM12 14c.015-.34.208-.646.477-.859a4 4 0 10-4.954 0c.27.213.462.519.476.859h4.002z" />
                   </svg>
-                  {gameState.hintsUsed === 0 ? "Aiuto (Hint)" : gameState.hintsUsed === 1 ? "Altro Aiuto" : "Aiuti finiti"}
+                  {gameState.hintsUsed === 0 ? t.hint_btn : gameState.hintsUsed === 1 ? t.hint_btn_more : t.hint_btn_none}
                 </button>
             </div>
           </div>
@@ -521,7 +511,7 @@ export default function App() {
           </div>
 
           <div className="mt-8 flex justify-center gap-4 text-gray-600 dark:text-gray-400 font-medium text-sm">
-             Tentativi rimasti: 
+             {t.attempts}: 
              <div className="flex gap-1">
                {[...Array(gameState.attemptsRemaining)].map((_, i) => (
                  <span key={i} className="text-red-500">❤️</span>
@@ -534,13 +524,13 @@ export default function App() {
         </div>
 
         {/* Ad Space */}
-        <AdBanner />
+        <AdBanner label={t.ad_label} />
 
         {(gameState.gameStatus === 'won' || gameState.gameStatus === 'lost') && (
           <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-in fade-in duration-300">
             <div className="bg-white dark:bg-gray-900 rounded-3xl p-6 sm:p-8 max-w-sm w-full text-center shadow-2xl scale-100 animate-in zoom-in-95 duration-300 relative overflow-hidden transition-colors">
               
-              {/* Confetti Background for Win - Simple CSS circles */}
+              {/* Confetti Background for Win */}
               {gameState.gameStatus === 'won' && (
                 <div className="absolute inset-0 pointer-events-none overflow-hidden opacity-30">
                   <div className="absolute top-0 left-10 w-4 h-4 bg-red-400 rounded-full animate-bounce delay-100"></div>
@@ -555,7 +545,7 @@ export default function App() {
               </div>
               
               <h2 className={`text-4xl font-title mb-2 ${gameState.gameStatus === 'won' ? 'text-green-600 dark:text-green-400' : 'text-orange-600 dark:text-orange-400'}`}>
-                {gameState.gameStatus === 'won' ? 'Bravissimo!' : 'Peccato!'}
+                {gameState.gameStatus === 'won' ? t.win_title : t.lose_title}
               </h2>
               
               {gameState.gameStatus === 'won' && (
@@ -574,7 +564,7 @@ export default function App() {
 
               <div className="bg-blue-50 dark:bg-gray-800 rounded-2xl p-4 my-6 border border-blue-100 dark:border-gray-700 relative transition-colors">
                 <div className="flex items-center justify-between mb-1">
-                  <span className="text-xs text-blue-400 dark:text-blue-300 uppercase font-bold tracking-wider">Italiano</span>
+                  <span className="text-xs text-blue-400 dark:text-blue-300 uppercase font-bold tracking-wider">{t.italian_label}</span>
                   <button onClick={() => speakWithGemini(gameState.currentWord!.italian, 'it')} className="p-1 hover:bg-blue-100 dark:hover:bg-gray-700 rounded-full text-blue-500 dark:text-blue-300 transition-colors">
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" viewBox="0 0 20 20" fill="currentColor">
                       <path fillRule="evenodd" d="M9.383 3.076A1 1 0 0110 4v12a1 1 0 01-1.707.707L4.586 13H2a1 1 0 01-1-1V8a1 1 0 011-1h2.586l3.707-3.707a1 1 0 011.09-.217zM14.657 2.929a1 1 0 011.414 0A9.972 9.972 0 0119 10a9.972 9.972 0 01-2.929 7.071 1 1 0 01-1.414-1.414A7.971 7.971 0 0017 10c0-2.21-.894-4.208-2.343-5.657a1 1 0 010-1.414zm-2.829 2.828a1 1 0 011.415 0A5.983 5.983 0 0115 10a5.983 5.983 0 01-1.757 4.243 1 1 0 01-1.415-1.415A3.984 3.984 0 0013 10a3.984 3.984 0 00-1.172-2.828 1 1 0 010-1.415z" clipRule="evenodd" />
@@ -586,7 +576,7 @@ export default function App() {
                 </div>
                 <div className="border-t border-blue-200 dark:border-gray-700 pt-3 transition-colors">
                   <div className="flex items-center justify-between mb-1">
-                    <span className="text-xs text-purple-400 dark:text-purple-300 uppercase font-bold tracking-wider">Inglese</span>
+                    <span className="text-xs text-purple-400 dark:text-purple-300 uppercase font-bold tracking-wider">{t.english_label}</span>
                     <button onClick={() => speakInstant(gameState.currentWord!.english, 'en')} className="p-1 hover:bg-purple-100 dark:hover:bg-gray-700 rounded-full text-purple-500 dark:text-purple-300 transition-colors">
                       <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" viewBox="0 0 20 20" fill="currentColor">
                         <path fillRule="evenodd" d="M9.383 3.076A1 1 0 0110 4v12a1 1 0 01-1.707.707L4.586 13H2a1 1 0 01-1-1V8a1 1 0 011-1h2.586l3.707-3.707a1 1 0 011.09-.217zM14.657 2.929a1 1 0 011.414 0A9.972 9.972 0 0119 10a9.972 9.972 0 01-2.929 7.071 1 1 0 01-1.414-1.414A7.971 7.971 0 0017 10c0-2.21-.894-4.208-2.343-5.657a1 1 0 010-1.414zm-2.829 2.828a1 1 0 011.415 0A5.983 5.983 0 0115 10a5.983 5.983 0 01-1.757 4.243 1 1 0 01-1.415-1.415A3.984 3.984 0 0013 10a3.984 3.984 0 00-1.172-2.828 1 1 0 010-1.415z" clipRule="evenodd" />
@@ -604,7 +594,7 @@ export default function App() {
                   onClick={selectNewWord}
                   className="w-full bg-gradient-to-r from-blue-500 to-blue-700 dark:from-blue-600 dark:to-blue-800 text-white font-bold py-4 rounded-xl shadow-lg hover:shadow-xl hover:-translate-y-1 transition-all text-lg flex items-center justify-center gap-2"
                 >
-                  <span>Prossima parola</span>
+                  <span>{t.next_word}</span>
                   <span>🚀</span>
                 </button>
               </div>
@@ -617,7 +607,7 @@ export default function App() {
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in">
           <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-xl max-w-sm w-full p-6 border border-gray-100 dark:border-gray-800">
             <div className="flex justify-between items-center mb-6">
-              <h2 className="text-xl font-bold text-gray-800 dark:text-white">Menu</h2>
+              <h2 className="text-xl font-bold text-gray-800 dark:text-white">{t.menu}</h2>
               <button onClick={() => {setIsMenuOpen(false); setResetConfirm(false);}} className="p-1 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg text-gray-500">
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -626,6 +616,24 @@ export default function App() {
             </div>
 
             <div className="space-y-4">
+              {/* Language Selector in Menu */}
+              <div className="grid grid-cols-2 gap-2 p-1 bg-gray-100 dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700">
+                <button 
+                  onClick={() => changeLanguage('it')} 
+                  className={`py-2 rounded-lg text-sm font-bold transition-all flex items-center justify-center gap-2 ${language === 'it' ? 'bg-white dark:bg-gray-600 shadow-sm text-blue-600 dark:text-blue-300' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'}`}
+                >
+                  <span className="text-base">🇮🇹</span>
+                  <span>{t.italian_label}</span>
+                </button>
+                <button 
+                  onClick={() => changeLanguage('en')} 
+                  className={`py-2 rounded-lg text-sm font-bold transition-all flex items-center justify-center gap-2 ${language === 'en' ? 'bg-white dark:bg-gray-600 shadow-sm text-blue-600 dark:text-blue-300' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'}`}
+                >
+                  <span className="text-base">🇬🇧</span>
+                  <span>{t.english_label}</span>
+                </button>
+              </div>
+
               {!resetConfirm ? (
                 <button 
                   onClick={() => setResetConfirm(true)}
@@ -634,52 +642,52 @@ export default function App() {
                   <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                   </svg>
-                  Ricomincia da Zero
+                  {t.reset_btn}
                 </button>
               ) : (
                 <div className="bg-red-50 dark:bg-red-900/20 p-4 rounded-xl border border-red-100 dark:border-red-900/50">
-                  <p className="text-red-800 dark:text-red-200 font-medium text-center mb-3">Sei sicuro? Perderai tutti i progressi.</p>
+                  <p className="text-red-800 dark:text-red-200 font-medium text-center mb-3">{t.reset_confirm}</p>
                   <div className="flex gap-2">
                     <button 
                       onClick={() => setResetConfirm(false)}
                       className="flex-1 py-2 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 rounded-lg font-bold shadow-sm hover:bg-gray-50 dark:hover:bg-gray-700"
                     >
-                      No
+                      {t.no_cancel}
                     </button>
                     <button 
                       onClick={handleResetGame}
                       className="flex-1 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg font-bold shadow-sm"
                     >
-                      Sì, Cancella
+                      {t.yes_reset}
                     </button>
                   </div>
                 </div>
               )}
               
               <div className="bg-blue-50 dark:bg-gray-800 p-4 rounded-xl">
-                 <h3 className="font-bold text-gray-700 dark:text-gray-200 mb-2 text-sm uppercase tracking-wide">Statistiche</h3>
+                 <h3 className="font-bold text-gray-700 dark:text-gray-200 mb-2 text-sm uppercase tracking-wide">{t.stats_title}</h3>
                  <div className="grid grid-cols-2 gap-4 text-sm">
                     <div>
-                        <p className="text-gray-500 dark:text-gray-400">Livello</p>
+                        <p className="text-gray-500 dark:text-gray-400">{t.stats_level}</p>
                         <p className="font-bold text-gray-800 dark:text-white capitalize">{gameState.currentDifficulty}</p>
                     </div>
                     <div>
-                        <p className="text-gray-500 dark:text-gray-400">Parole Trovate</p>
+                        <p className="text-gray-500 dark:text-gray-400">{t.stats_found}</p>
                         <p className="font-bold text-gray-800 dark:text-white">{gameState.successCount}</p>
                     </div>
                     <div>
-                        <p className="text-gray-500 dark:text-gray-400">Stelle</p>
+                        <p className="text-gray-500 dark:text-gray-400">{t.stats_stars}</p>
                         <p className="font-bold text-yellow-500 flex items-center gap-1">{gameState.totalStars} <span>⭐</span></p>
                     </div>
                     <div>
-                        <p className="text-gray-500 dark:text-gray-400">Streak</p>
+                        <p className="text-gray-500 dark:text-gray-400">{t.stats_streak}</p>
                         <p className="font-bold text-orange-500 flex items-center gap-1">{gameState.streak} <span>🔥</span></p>
                     </div>
                  </div>
               </div>
 
               <div className="text-center text-xs text-gray-400 mt-4">
-                 v1.0.1 • Italian Hangman
+                 v1.1.0 • Italian Hangman
               </div>
             </div>
           </div>
@@ -688,8 +696,8 @@ export default function App() {
       </main>
 
       <footer className="mt-8 text-center text-gray-400 dark:text-gray-500 text-sm px-4 pb-4 transition-colors">
-        <p>Usa la tua tastiera fisica per giocare!</p>
-        <p className="mt-1 font-medium">Imparare divertendosi • Learning while having fun</p>
+        <p>{t.keyboard_msg}</p>
+        <p className="mt-1 font-medium">{t.slogan}</p>
       </footer>
     </div>
   );

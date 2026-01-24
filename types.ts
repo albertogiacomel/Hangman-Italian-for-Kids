@@ -14,6 +14,7 @@ export interface Config {
 }
 
 export type GameStatus = 'new' | 'playing' | 'won' | 'lost';
+export type Language = 'it' | 'en';
 
 export interface GameState {
   currentWord: Word | null;
