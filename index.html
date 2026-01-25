@@ -3,12 +3,12 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="description" content="Italian Hangman - Un modo divertente per imparare il vocabolario italiano">
+  <meta name="description" content="Italian Hangman - Un modo divertente per imparare il vocabolario italiano per bambini e principianti.">
   
   <title>Italian Hangman - Impara l'Italiano Giocando</title>
   <link rel="canonical" href="https://hangman.giacomel.info/" />
 
-  <!-- Tailwind CSS CDN for immediate and reliable styling -->
+  <!-- Tailwind CSS CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
     tailwind.config = {
@@ -24,20 +24,33 @@
     }
   </script>
 
-  <!-- Google Fonts -->
+  <!-- Google Fonts con caricamento ottimizzato -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Fredoka+One&family=Quicksand:wght@400;500;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Fredoka+One&family=Quicksand:wght@400;500;700&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
   
   <style type="text/css">
     body { font-family: 'Quicksand', sans-serif; }
     .font-title { font-family: 'Fredoka One', cursive; }
     .cursor-wait { cursor: wait; }
+    /* Previene il flashing del contenuto non stilizzato */
+    #root:empty { background: transparent; }
   </style>
 
-  <!-- Google AdSense -->
+  <!-- Google AdSense - Inserisci il tuo ID reale per monetizzare e coprire eventuali costi futuri -->
   <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-XXXXXXXXXXXXXXXX" crossorigin="anonymous"></script>
-
+<script type="importmap">
+{
+  "imports": {
+    "react": "https://esm.sh/react@^19.2.3",
+    "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
+    "react/": "https://esm.sh/react@^19.2.3/",
+    "@google/genai": "https://esm.sh/@google/genai@^1.38.0",
+    "vite": "https://esm.sh/vite@^7.3.1",
+    "@vitejs/plugin-react": "https://esm.sh/@vitejs/plugin-react@^5.1.2"
+  }
+}
+</script>
 </head>
 <body class="bg-blue-50 text-gray-900 dark:bg-gray-950 dark:text-gray-100 transition-colors duration-300">
   <div id="root"></div>
