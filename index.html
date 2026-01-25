@@ -8,10 +8,25 @@
   <title>Italian Hangman - Impara l'Italiano Giocando</title>
   <link rel="canonical" href="https://hangman.giacomel.info/" />
 
+  <!-- Tailwind CSS CDN for immediate styling -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Quicksand', 'sans-serif'],
+            title: ['Fredoka One', 'cursive'],
+          },
+        },
+      },
+    }
+  </script>
+
   <!-- Google Fonts -->
   <link href="https://fonts.googleapis.com/css2?family=Fredoka+One&family=Quicksand:wght@400;500;700&display=swap" rel="stylesheet">
   
-  <!-- Tailwind/PostCSS Styles are injected by Vite -->
   <style type="text/css">
     body { font-family: 'Quicksand', sans-serif; }
     .font-title { font-family: 'Fredoka One', cursive; }
@@ -23,11 +38,11 @@
 <script type="importmap">
 {
   "imports": {
-    "@google/genai": "https://esm.sh/@google/genai@^1.38.0",
-    "vite": "https://esm.sh/vite@^7.3.1",
+    "react": "https://esm.sh/react@^19.2.3",
     "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
     "react/": "https://esm.sh/react@^19.2.3/",
-    "react": "https://esm.sh/react@^19.2.3",
+    "@google/genai": "https://esm.sh/@google/genai@^1.38.0",
+    "vite": "https://esm.sh/vite@^7.3.1",
     "@vitejs/plugin-react": "https://esm.sh/@vitejs/plugin-react@^5.1.2"
   }
 }
