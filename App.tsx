@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { GameState, CategoryEmoji, LETTER_NAMES_ITALIAN, Language } from './types';
 import { INITIAL_WORDS, ITALIAN_ALPHABET, CONFIG } from './constants';
@@ -23,10 +24,10 @@ export default function App() {
   };
 
   const [theme, setTheme] = useState(() => {
-    if (localStorage.getItem('theme')) {
+    if (typeof window !== 'undefined' && localStorage.getItem('theme')) {
       return localStorage.getItem('theme') as 'light' | 'dark';
     }
-    return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    return (typeof window !== 'undefined' && window.matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light';
   });
 
   useEffect(() => {
@@ -291,10 +292,10 @@ export default function App() {
           <div className="flex items-center gap-1 bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300 px-3 py-1.5 rounded-full border border-yellow-200 shadow-sm">
              <span className="text-lg">⭐</span><span className="font-bold text-sm">{gameState.totalStars}</span>
           </div>
-          <button onClick={toggleTheme} className="p-2 bg-gray-50 dark:bg-gray-800 text-gray-500 rounded-xl border border-gray-200 dark:border-gray-700">
+          <button onClick={toggleTheme} className="p-2 bg-gray-50 dark:bg-gray-800 text-gray-500 rounded-xl border border-gray-200 dark:border-gray-700 hover:bg-gray-100 transition-all">
              {theme === 'light' ? '🌙' : '☀️'}
           </button>
-          <button onClick={() => setIsMenuOpen(true)} className="p-2 bg-gray-50 dark:bg-gray-800 text-gray-500 rounded-xl border border-gray-200 dark:border-gray-700">
+          <button onClick={() => setIsMenuOpen(true)} className="p-2 bg-gray-50 dark:bg-gray-800 text-gray-500 rounded-xl border border-gray-200 dark:border-gray-700 hover:bg-gray-100 transition-all">
             ☰
           </button>
         </nav>
@@ -369,7 +370,7 @@ export default function App() {
 
         {(gameState.gameStatus === 'won' || gameState.gameStatus === 'lost') && (
           <div className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-50 p-4 animate-in fade-in duration-300">
-            <div className="bg-white dark:bg-gray-900 rounded-3xl p-8 max-w-sm w-full text-center shadow-2xl scale-100 animate-in zoom-in-95 duration-300">
+            <div className="bg-white dark:bg-gray-900 rounded-3xl p-8 max-w-sm w-full text-center shadow-2xl scale-100 animate-in zoom-in-95 duration-300 border-t-8 border-blue-500">
               <div className="text-7xl mb-4 animate-bounce-slow">
                 {gameState.gameStatus === 'won' ? '🏆' : '😿'}
               </div>
@@ -392,7 +393,7 @@ export default function App() {
           <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-xl max-w-sm w-full p-6 border dark:border-gray-800">
             <div className="flex justify-between items-center mb-6">
               <h2 className="text-xl font-bold">{t.menu}</h2>
-              <button onClick={() => {setIsMenuOpen(false); setResetConfirm(false);}} className="text-gray-500">✕</button>
+              <button onClick={() => {setIsMenuOpen(false); setResetConfirm(false);}} className="text-gray-500 hover:text-black transition-colors">✕</button>
             </div>
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-2 p-1 bg-gray-100 dark:bg-gray-800 rounded-xl">
@@ -406,7 +407,7 @@ export default function App() {
                 </button>
               </div>
               {!resetConfirm ? (
-                <button onClick={() => setResetConfirm(true)} className="w-full p-4 bg-red-50 dark:bg-red-900/20 text-red-600 font-bold rounded-xl">{t.reset_btn}</button>
+                <button onClick={() => setResetConfirm(true)} className="w-full p-4 bg-red-50 dark:bg-red-900/20 text-red-600 font-bold rounded-xl hover:bg-red-100 transition-colors">{t.reset_btn}</button>
               ) : (
                 <div className="space-y-3">
                   <p className="text-xs text-center text-red-600 font-bold">{t.reset_confirm}</p>
@@ -416,7 +417,7 @@ export default function App() {
                   </div>
                 </div>
               )}
-              <div className="text-center text-[10px] text-gray-400 mt-4">v1.3.12 • Italian Hangman</div>
+              <div className="text-center text-[10px] text-gray-400 mt-4 font-mono">v1.0.0 • Italian Hangman</div>
             </div>
           </div>
         </div>

@@ -1,4 +1,5 @@
-/* Direttive Tailwind necessarie per il processo di build */
+
+/* Release 1.0 - Direttive Tailwind obbligatorie per la build */
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -7,6 +8,7 @@
   body {
     -webkit-tap-highlight-color: transparent;
     font-family: 'Quicksand', sans-serif;
+    @apply antialiased;
   }
 }
 
@@ -18,7 +20,7 @@
   cursor: wait;
 }
 
-/* Animazioni per feedback visivi */
+/* Animazioni Feedback Release 1.0 */
 @keyframes pop {
   0% { transform: scale(1); }
   50% { transform: scale(1.1); }
@@ -27,4 +29,16 @@
 
 .animate-pop {
   animation: pop 0.3s ease-out;
+}
+
+/* Scrollbar styling for Dark Mode */
+.dark ::-webkit-scrollbar {
+  width: 8px;
+}
+.dark ::-webkit-scrollbar-track {
+  background: #0f172a;
+}
+.dark ::-webkit-scrollbar-thumb {
+  background: #334155;
+  border-radius: 4px;
 }
