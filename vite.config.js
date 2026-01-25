@@ -24,28 +24,23 @@ export default defineConfig(({ mode }) => {
     server: {
       host: '0.0.0.0',
       port: 8080,
-      strictPort: true,
-      allowedHosts: true,
-      headers: {
-        'Content-Security-Policy': cspHeader,
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Methods': 'GET, POST, OPTIONS'
-      }
+      strictPort: true
     },
     preview: {
       host: '0.0.0.0',
       port: 8080,
-      strictPort: true,
-      allowedHosts: true,
-      headers: {
-        'Content-Security-Policy': cspHeader,
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Methods': 'GET, POST, OPTIONS'
-      }
+      strictPort: true
     },
     build: {
       outDir: 'dist',
-      sourcemap: true
+      sourcemap: true,
+      rollupOptions: {
+        output: {
+          manualChunks: {
+            'vendor': ['react', 'react-dom', '@google/genai']
+          }
+        }
+      }
     }
   };
 });
