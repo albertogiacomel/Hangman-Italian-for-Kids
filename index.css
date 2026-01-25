@@ -1,7 +1,12 @@
-/* Stili globali puliti */
+/* Direttive Tailwind necessarie per il processo di build */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
 @layer base {
   body {
     -webkit-tap-highlight-color: transparent;
+    font-family: 'Quicksand', sans-serif;
   }
 }
 
