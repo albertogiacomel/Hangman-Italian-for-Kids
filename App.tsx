@@ -19,6 +19,23 @@ export default function App() {
   const { state, handleLetterGuess, handleHint, selectNewWord, resetGame } = useHangman(language, sfxEnabled);
   const t = TRANSLATIONS[language];
 
+  // Listener per la tastiera fisica
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Ignora combinazioni di tasti di sistema
+      if (e.ctrlKey || e.altKey || e.metaKey) return;
+      
+      const key = e.key.toLowerCase();
+      // Verifica se è una lettera a-z
+      if (/^[a-z]$/.test(key)) {
+        handleLetterGuess(key);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [handleLetterGuess]);
+
   useEffect(() => {
     document.documentElement.classList.toggle('dark', theme === 'dark');
     localStorage.setItem('theme', theme);
