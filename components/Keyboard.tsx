@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { ITALIAN_ALPHABET } from '../constants';
+import { ITALIAN_ALPHABET } from '../data/constants';
 
 interface KeyboardProps {
   guessedLetters: string[];
