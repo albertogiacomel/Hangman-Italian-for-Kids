@@ -1,11 +1,12 @@
 import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
 
-export default defineConfig(({ mode }) => {
+// Fix: Removed the problematic 'css.postcss' block. Explicitly setting it to false was invalid 
+// according to Vite's type definitions and unnecessary as Vite automatically picks up postcss.config.js.
+export default defineConfig(({ command, mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
   
   // Cloud Run inietta la porta tramite la variabile d'ambiente PORT.
-  // È fondamentale che sia il server di dev che quello di preview ascoltino su questa porta.
   const port = parseInt(process.env.PORT || '8080');
 
   return {
