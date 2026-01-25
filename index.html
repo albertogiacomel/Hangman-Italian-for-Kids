@@ -8,7 +8,7 @@
   <title>Italian Hangman - Impara l'Italiano Giocando</title>
   <link rel="canonical" href="https://hangman.giacomel.info/" />
 
-  <!-- Tailwind CSS CDN - Migliore per il Free Tier (minor traffico egress da Cloud Run) -->
+  <!-- Tailwind CSS CDN for immediate and reliable styling -->
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
     tailwind.config = {
@@ -33,8 +33,6 @@
     body { font-family: 'Quicksand', sans-serif; }
     .font-title { font-family: 'Fredoka One', cursive; }
     .cursor-wait { cursor: wait; }
-    /* Fix per evitare layout shift durante il caricamento di Tailwind */
-    [v-cloak] { display: none; }
   </style>
 
   <!-- Google AdSense -->
