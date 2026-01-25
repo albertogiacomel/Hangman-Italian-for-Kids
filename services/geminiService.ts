@@ -94,8 +94,8 @@ const ensureAudioLoaded = async (text: string, language: 'it' | 'en'): Promise<A
   if (language === 'en') return null;
   if (isQuotaExhausted) return null; // Se abbiamo esaurito la quota, non tentare nemmeno
 
-  const apiKey = process.env.API_KEY;
-  if (!apiKey) return null;
+  // Ensure process.env.API_KEY is available as required by guidelines
+  if (!process.env.API_KEY) return null;
 
   const ctx = getAudioContext();
   const cacheKey = `${language}:${text.toLowerCase()}`;
@@ -111,8 +111,8 @@ const ensureAudioLoaded = async (text: string, language: 'it' | 'en'): Promise<A
     return audioBuffer;
   }
 
-  // 3. API CALL (GEMINI)
-  const ai = new GoogleGenAI({ apiKey });
+  // 3. API CALL (GEMINI) - Directly use process.env.API_KEY in constructor as per guidelines
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   const prompt = `Dì chiaramente in italiano: ${text}`;
 
   try {
