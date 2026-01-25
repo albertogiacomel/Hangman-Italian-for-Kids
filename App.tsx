@@ -7,6 +7,7 @@ import { useHangman } from './hooks/useHangman';
 import { HangmanVisual } from './components/HangmanVisual';
 import { Keyboard } from './components/Keyboard';
 import { ProgressBar } from './components/ProgressBar';
+import { AdBanner } from './components/AdBanner';
 
 export default function App() {
   const [language, setLanguage] = useState<Language>(() => (localStorage.getItem('appLanguage') as Language) || 'it');
@@ -27,27 +28,37 @@ export default function App() {
     localStorage.setItem('appLanguage', lang);
   };
 
+  const toggleSfx = () => {
+    const newValue = !sfxEnabled;
+    setSfxEnabled(newValue);
+    localStorage.setItem('sfxEnabled', JSON.stringify(newValue));
+  };
+
   return (
-    <div className="min-h-screen bg-blue-50 dark:bg-gray-950 text-gray-900 dark:text-gray-100 transition-colors duration-300 font-sans">
-      {/* HEADER */}
+    <div className="min-h-screen bg-blue-50 dark:bg-gray-950 text-gray-900 dark:text-gray-100 transition-colors duration-300 font-sans selection:bg-blue-200">
+      {/* HEADER PROFESSIONALE */}
       <header className="bg-white dark:bg-gray-900 shadow-sm sticky top-0 z-20 px-4 py-3 flex items-center justify-between border-b dark:border-gray-800">
         <div className="flex items-center gap-2">
-          <div className="bg-blue-600 text-white p-2 rounded-lg text-xl">🇮🇹</div>
+          <div className="bg-blue-600 text-white p-2 rounded-lg text-xl shadow-inner">🇮🇹</div>
           <div>
             <h1 className="text-xl font-title text-blue-800 dark:text-blue-400 leading-none">Hangman</h1>
-            <p className="text-[10px] font-bold uppercase tracking-widest text-blue-400">{t.subtitle}</p>
+            <p className="text-[10px] font-bold uppercase tracking-widest text-blue-400 dark:text-blue-300">{t.subtitle}</p>
           </div>
         </div>
-        <div className="flex items-center gap-3">
-          <div className="bg-orange-100 dark:bg-orange-900/30 text-orange-600 px-3 py-1 rounded-full text-xs font-bold">🔥 {state.streak}</div>
-          <div className="bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 px-3 py-1 rounded-full text-xs font-bold">⭐ {state.totalStars}</div>
-          <button onClick={() => setTheme(t => t === 'light' ? 'dark' : 'light')} className="p-2 bg-gray-100 dark:bg-gray-800 rounded-lg">{theme === 'light' ? '🌙' : '☀️'}</button>
-          <button onClick={() => setIsMenuOpen(true)} className="p-2 bg-gray-100 dark:bg-gray-800 rounded-lg">☰</button>
+        <div className="flex items-center gap-2 sm:gap-3">
+          <div className="bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400 px-3 py-1 rounded-full text-xs font-bold border border-orange-200 dark:border-orange-800">🔥 {state.streak}</div>
+          <div className="bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400 px-3 py-1 rounded-full text-xs font-bold border border-yellow-200 dark:border-yellow-800">⭐ {state.totalStars}</div>
+          <button onClick={() => setTheme(t => t === 'light' ? 'dark' : 'light')} className="p-2 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition-colors" title="Toggle Theme">
+            {theme === 'light' ? '🌙' : '☀️'}
+          </button>
+          <button onClick={() => setIsMenuOpen(true)} className="p-2 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition-colors">
+            ☰
+          </button>
         </div>
       </header>
 
       <main className="max-w-4xl mx-auto p-4 md:p-8">
-        {/* PROGRESS */}
+        {/* BARRA DI PROGRESSO LIVELLO */}
         <div className="mb-6 bg-white dark:bg-gray-900 p-4 rounded-2xl shadow-sm border dark:border-gray-800">
           <ProgressBar 
             current={state.difficultyProgress[state.currentDifficulty] % CONFIG.words_per_difficulty_level} 
@@ -56,79 +67,126 @@ export default function App() {
           />
         </div>
 
-        {/* BOARD */}
-        <div className="bg-white dark:bg-gray-900 rounded-3xl shadow-xl border-4 border-blue-100 dark:border-gray-800 p-6 text-center">
-          <div className="flex flex-col md:flex-row items-center gap-8">
-            <div className="w-full md:w-1/3"><HangmanVisual wrongGuesses={CONFIG.max_attempts - state.attemptsRemaining} /></div>
+        {/* AREA DI GIOCO CENTRALE */}
+        <div className="bg-white dark:bg-gray-900 rounded-3xl shadow-xl border-4 border-blue-100 dark:border-gray-800 p-6 md:p-10 text-center transition-colors">
+          <div className="flex flex-col md:flex-row items-center gap-8 md:gap-12">
+            <div className="w-full md:w-1/3 flex justify-center">
+              <HangmanVisual wrongGuesses={CONFIG.max_attempts - state.attemptsRemaining} />
+            </div>
             <div className="w-full md:w-2/3 flex flex-col items-center gap-6">
-              <div className="px-4 py-2 bg-gray-50 dark:bg-gray-800 rounded-full text-xs font-bold uppercase tracking-widest text-gray-500">
+              <div className="px-4 py-2 bg-gray-50 dark:bg-gray-800 rounded-full text-xs font-bold uppercase tracking-widest text-gray-500 dark:text-gray-400 border dark:border-gray-700">
                 {CategoryEmoji[state.currentWord?.category as keyof typeof CategoryEmoji] || '🏷️'} {t.categories[state.currentWord?.category || '']}
               </div>
-              <div className="text-4xl md:text-6xl font-mono font-bold tracking-tighter flex gap-2">
+              
+              <div className="text-4xl md:text-6xl font-mono font-bold tracking-tighter flex flex-wrap justify-center gap-x-3 gap-y-1">
                 {state.currentWord?.italian.split('').map((char, i) => (
-                  <span key={i}>{state.guessedLetters.includes(char.toLowerCase()) ? char.toUpperCase() : '_'}</span>
+                  <span key={i} className="border-b-4 border-gray-200 dark:border-gray-700 min-w-[1.5rem]">
+                    {state.guessedLetters.includes(char.toLowerCase()) ? char.toUpperCase() : '_'}
+                  </span>
                 ))}
               </div>
-              <div className="h-8 text-blue-600 dark:text-blue-400 font-bold">{state.feedback}</div>
-              <button onClick={handleHint} disabled={state.hintsUsed >= 2 || state.gameStatus !== 'playing'} className="bg-yellow-100 text-yellow-700 px-6 py-2 rounded-xl font-bold hover:bg-yellow-200 disabled:opacity-50">
+
+              <div className="h-8 text-blue-600 dark:text-blue-400 font-bold text-lg animate-pulse">{state.feedback}</div>
+              
+              <button 
+                onClick={handleHint} 
+                disabled={state.hintsUsed >= 2 || state.gameStatus !== 'playing'} 
+                className="bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400 px-6 py-3 rounded-2xl font-bold hover:bg-yellow-200 dark:hover:bg-yellow-800 transition-all disabled:opacity-30 disabled:cursor-not-allowed shadow-sm active:scale-95"
+              >
                 💡 {state.hintsUsed === 0 ? t.hint_btn : state.hintsUsed === 1 ? t.hint_btn_more : t.hint_btn_none}
               </button>
             </div>
           </div>
 
-          <div className="mt-8"><Keyboard guessedLetters={state.guessedLetters} onLetterGuess={handleLetterGuess} disabled={state.gameStatus !== 'playing'} /></div>
+          <div className="mt-10">
+            <Keyboard guessedLetters={state.guessedLetters} onLetterGuess={handleLetterGuess} disabled={state.gameStatus !== 'playing'} />
+          </div>
           
-          <div className="mt-8 flex justify-center gap-2">
-            {[...Array(CONFIG.max_attempts)].map((_, i) => (
-              <span key={i} className={i < state.attemptsRemaining ? "text-red-500" : "text-gray-300"}>❤️</span>
-            ))}
+          <div className="mt-8 flex justify-center gap-2 items-center text-sm font-medium text-gray-500 dark:text-gray-400">
+            <span className="mr-2">{t.attempts}:</span>
+            <div className="flex gap-1">
+              {[...Array(CONFIG.max_attempts)].map((_, i) => (
+                <span key={i} className={`text-xl transition-all duration-300 ${i < state.attemptsRemaining ? "text-red-500 scale-110" : "text-gray-200 dark:text-gray-800 opacity-50"}`}>
+                  {i < state.attemptsRemaining ? "❤️" : "🖤"}
+                </span>
+              ))}
+            </div>
           </div>
         </div>
+
+        <AdBanner label={t.ad_label} />
       </main>
 
-      {/* WIN/LOSE MODAL */}
+      {/* MODALE DI VITTORIA / SCONFITTA */}
       {(state.gameStatus === 'won' || state.gameStatus === 'lost') && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-gray-900 rounded-3xl p-8 max-w-sm w-full text-center shadow-2xl animate-pop">
-            <div className="text-7xl mb-4">{state.gameStatus === 'won' ? '🏆' : '😿'}</div>
-            <h2 className="text-3xl font-title mb-4">{state.gameStatus === 'won' ? t.win_title : t.lose_title}</h2>
-            <div className="bg-blue-50 dark:bg-gray-800 p-4 rounded-2xl mb-6">
-              <div className="text-2xl font-bold uppercase">{state.currentWord?.italian}</div>
-              <div className="text-blue-600 dark:text-blue-400 italic">{state.currentWord?.english}</div>
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-md z-50 flex items-center justify-center p-4 animate-in fade-in duration-300">
+          <div className="bg-white dark:bg-gray-900 rounded-3xl p-8 max-w-sm w-full text-center shadow-2xl animate-pop border-t-8 border-blue-500">
+            <div className="text-8xl mb-4 animate-bounce-slow">
+              {state.gameStatus === 'won' ? '🏆' : '😿'}
             </div>
-            <button onClick={selectNewWord} className="w-full bg-blue-600 text-white font-bold py-4 rounded-xl shadow-lg hover:bg-blue-700">
+            <h2 className="text-3xl font-title mb-4 text-gray-800 dark:text-white">
+              {state.gameStatus === 'won' ? t.win_title : t.lose_title}
+            </h2>
+            <div className="bg-blue-50 dark:bg-gray-800 p-6 rounded-2xl mb-8 border border-blue-100 dark:border-gray-700">
+              <div className="text-3xl font-bold uppercase text-blue-900 dark:text-blue-100 tracking-wider mb-1">
+                {state.currentWord?.italian}
+              </div>
+              <div className="text-blue-600 dark:text-blue-400 italic text-xl">
+                {state.currentWord?.english}
+              </div>
+            </div>
+            <button 
+              onClick={selectNewWord} 
+              className="w-full bg-blue-600 text-white font-bold py-5 rounded-2xl shadow-lg hover:bg-blue-700 active:scale-95 transition-all text-xl"
+            >
               {t.next_word} 🚀
             </button>
           </div>
         </div>
       )}
 
-      {/* MENU OVERLAY */}
+      {/* MENU IMPOSTAZIONI OVERLAY */}
       {isMenuOpen && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-gray-900 rounded-2xl p-6 w-full max-w-sm">
-            <div className="flex justify-between items-center mb-6">
-              <h2 className="text-xl font-bold">{t.menu}</h2>
-              <button onClick={() => setIsMenuOpen(false)}>✕</button>
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in">
+          <div className="bg-white dark:bg-gray-900 rounded-2xl p-6 w-full max-w-sm shadow-2xl border dark:border-gray-800">
+            <div className="flex justify-between items-center mb-8">
+              <h2 className="text-2xl font-bold text-gray-800 dark:text-white">{t.menu}</h2>
+              <button onClick={() => setIsMenuOpen(false)} className="text-gray-400 hover:text-gray-600 text-2xl p-2">✕</button>
             </div>
-            <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-2 bg-gray-100 dark:bg-gray-800 p-1 rounded-xl">
-                <button onClick={() => toggleLanguage('it')} className={`py-2 rounded-lg text-sm font-bold ${language === 'it' ? 'bg-white shadow' : ''}`}>🇮🇹 IT</button>
-                <button onClick={() => toggleLanguage('en')} className={`py-2 rounded-lg text-sm font-bold ${language === 'en' ? 'bg-white shadow' : ''}`}>🇬🇧 EN</button>
+            <div className="space-y-6">
+              <div className="space-y-2">
+                <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">{t.language_label || "Lingua UI"}</label>
+                <div className="grid grid-cols-2 gap-2 bg-gray-100 dark:bg-gray-800 p-1.5 rounded-xl">
+                  <button onClick={() => toggleLanguage('it')} className={`py-2 rounded-lg text-sm font-bold transition-all ${language === 'it' ? 'bg-white dark:bg-gray-600 shadow-sm text-blue-600 dark:text-blue-100' : 'text-gray-500'}`}>🇮🇹 IT</button>
+                  <button onClick={() => toggleLanguage('en')} className={`py-2 rounded-lg text-sm font-bold transition-all ${language === 'en' ? 'bg-white dark:bg-gray-600 shadow-sm text-blue-600 dark:text-blue-100' : 'text-gray-500'}`}>🇬🇧 EN</button>
+                </div>
               </div>
-              <div className="flex justify-between items-center bg-gray-50 dark:bg-gray-800 p-3 rounded-xl">
-                <span>{t.sfx_label}</span>
-                <button onClick={() => setSfxEnabled(!sfxEnabled)}>{sfxEnabled ? '🔊' : '🔇'}</button>
+
+              <div className="flex justify-between items-center bg-gray-50 dark:bg-gray-800 p-4 rounded-xl border dark:border-gray-700">
+                <div className="flex flex-col">
+                  <span className="font-bold text-gray-700 dark:text-gray-200">{t.sfx_label}</span>
+                  <span className="text-[10px] text-gray-400 uppercase font-bold">{sfxEnabled ? "On" : "Off"}</span>
+                </div>
+                <button onClick={toggleSfx} className={`w-14 h-8 rounded-full relative transition-colors ${sfxEnabled ? 'bg-blue-600' : 'bg-gray-300 dark:bg-gray-700'}`}>
+                   <div className={`absolute top-1 w-6 h-6 bg-white rounded-full transition-all shadow-sm ${sfxEnabled ? 'left-7' : 'left-1'}`} />
+                </button>
               </div>
-              <button onClick={resetGame} className="w-full py-4 text-red-600 font-bold bg-red-50 dark:bg-red-900/20 rounded-xl">{t.reset_btn}</button>
+
+              <button 
+                onClick={() => { resetGame(); setIsMenuOpen(false); }} 
+                className="w-full py-4 text-red-600 dark:text-red-400 font-bold bg-red-50 dark:bg-red-900/20 rounded-xl hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors border border-red-100 dark:border-red-900/50"
+              >
+                {t.reset_btn}
+              </button>
             </div>
+            <div className="mt-8 text-center text-[10px] text-gray-400 font-mono">v1.1.0 • Professional Edition</div>
           </div>
         </div>
       )}
       
-      <footer className="text-center p-8 text-gray-400 text-sm">
-        <p>{t.keyboard_msg}</p>
-        <p className="mt-2 font-mono">v1.1.0 • Professional Edition</p>
+      <footer className="text-center p-8 text-gray-400 dark:text-gray-500 text-xs">
+        <p className="mb-1">{t.keyboard_msg}</p>
+        <p className="font-bold text-gray-500 dark:text-gray-400">{t.slogan} • &copy; 2026</p>
       </footer>
     </div>
   );

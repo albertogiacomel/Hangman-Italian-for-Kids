@@ -48,8 +48,9 @@ const decode = (base64: string) => {
   return bytes;
 };
 
+// Use robust decoding with explicit offset and length for raw PCM audio from Gemini
 const decodeAudioData = async (data: Uint8Array, ctx: AudioContext) => {
-  const dataInt16 = new Int16Array(data.buffer);
+  const dataInt16 = new Int16Array(data.buffer, data.byteOffset, data.byteLength / 2);
   const buffer = ctx.createBuffer(1, dataInt16.length, 24000);
   const channelData = buffer.getChannelData(0);
   for (let i = 0; i < dataInt16.length; i++) channelData[i] = dataInt16[i] / 32768.0;
@@ -61,6 +62,7 @@ const memoryCache = new Map<string, AudioBuffer>();
 export const preloadAudio = async (text: string) => {
   if (memoryCache.has(text) || !process.env.API_KEY) return;
   try {
+    // Always initialize GoogleGenAI with a named parameter object
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     const response = await ai.models.generateContent({
       model: "gemini-2.5-flash-preview-tts",

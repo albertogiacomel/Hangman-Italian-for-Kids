@@ -1,2 +1,2 @@
-// Deprecated: Use data/types.ts instead
+// Migrated to data/types.ts
 export * from './data/types';

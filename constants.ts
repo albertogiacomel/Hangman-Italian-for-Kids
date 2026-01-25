@@ -1,2 +1,2 @@
-// Deprecated: Use data/constants.ts instead
+// Migrated to data/constants.ts
 export * from './data/constants';

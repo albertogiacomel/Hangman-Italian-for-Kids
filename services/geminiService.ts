@@ -1,2 +1,2 @@
-// Deprecated: Use services/audioService.ts instead
+// Migrated to services/audioService.ts
 export * from './audioService';
