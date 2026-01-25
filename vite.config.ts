@@ -4,9 +4,8 @@ import tailwindcss from 'tailwindcss';
 import autoprefixer from 'autoprefixer';
 
 export default defineConfig(({ mode }) => {
-  const env = loadEnv(mode, process.cwd(), '');
-  
-  // Cloud Run inietta la porta tramite la variabile d'ambiente PORT.
+  // Caricamento variabili d'ambiente
+  const env = loadEnv(mode, (process as any).cwd(), '');
   const port = parseInt(process.env.PORT || '8080');
 
   return {
@@ -25,12 +24,12 @@ export default defineConfig(({ mode }) => {
     server: {
       host: '0.0.0.0',
       port: port,
-      strictPort: true
+      strictPort: true,
     },
     preview: {
       host: '0.0.0.0',
       port: port,
-      strictPort: true
+      strictPort: true,
     },
     build: {
       outDir: 'dist',

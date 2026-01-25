@@ -1,12 +1,25 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
-
-/* Custom styles */
-body {
-  font-family: 'Quicksand', sans-serif;
+/* Stili globali puliti */
+@layer base {
+  body {
+    -webkit-tap-highlight-color: transparent;
+  }
 }
 
 .font-title {
   font-family: 'Fredoka One', cursive;
+}
+
+.cursor-wait {
+  cursor: wait;
+}
+
+/* Animazioni per feedback visivi */
+@keyframes pop {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.1); }
+  100% { transform: scale(1); }
+}
+
+.animate-pop {
+  animation: pop 0.3s ease-out;
 }
