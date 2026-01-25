@@ -38,7 +38,7 @@ export default defineConfig(({ mode }) => {
     },
     preview: {
       host: '0.0.0.0',
-      port: 8080,
+      port: Number(process.env.PORT) || 8080,
       strictPort: true,
       headers: {
         'Content-Security-Policy': cspHeader
