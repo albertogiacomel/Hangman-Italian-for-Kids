@@ -33,6 +33,7 @@ const decodeAudioData = async (
 };
 
 // --- INDEXED DB HELPER (PERSISTENT CACHE) ---
+// Fondamentale per il Free Tier: salva l'audio localmente per non rifare chiamate API costose in termini di tempo e quota
 const DB_NAME = 'hangman_audio_db';
 const STORE_NAME = 'audio_files';
 const DB_VERSION = 1;
@@ -62,7 +63,6 @@ const getAudioFromDB = async (key: string): Promise<ArrayBuffer | undefined> => 
       request.onerror = () => reject(request.error);
     });
   } catch (e) {
-    console.warn("DB Read Error", e);
     return undefined;
   }
 };
@@ -73,18 +73,14 @@ const saveAudioToDB = async (key: string, data: ArrayBuffer) => {
     const transaction = db.transaction(STORE_NAME, 'readwrite');
     const store = transaction.objectStore(STORE_NAME);
     store.put(data, key);
-  } catch (e) {
-    console.warn("DB Write Error", e);
-  }
+  } catch (e) {}
 };
 
 // --- MAIN SERVICE ---
 
-// Singleton AudioContext
 let sharedAudioCtx: AudioContext | null = null;
-// Simple In-Memory Cache (for speed within same session before DB hit)
 const memoryCache = new Map<string, AudioBuffer>();
-// Circuit breaker for Quota Exhausted
+// Circuit breaker per gestire il Free Tier di Gemini
 let isQuotaExhausted = false;
 
 const getAudioContext = () => {
@@ -94,14 +90,9 @@ const getAudioContext = () => {
   return sharedAudioCtx;
 };
 
-// Core function: Ensures audio is in cache (Memory or DB), fetching from API if needed.
-// Does NOT play the audio.
 const ensureAudioLoaded = async (text: string, language: 'it' | 'en'): Promise<AudioBuffer | null> => {
-  // Inglese usa browser native, niente da precaricare lato API
   if (language === 'en') return null;
-  
-  // Circuit breaker: se abbiamo finito la quota, inutile provare
-  if (isQuotaExhausted) return null;
+  if (isQuotaExhausted) return null; // Se abbiamo esaurito la quota, non tentare nemmeno
 
   const apiKey = process.env.API_KEY;
   if (!apiKey) return null;
@@ -109,23 +100,20 @@ const ensureAudioLoaded = async (text: string, language: 'it' | 'en'): Promise<A
   const ctx = getAudioContext();
   const cacheKey = `${language}:${text.toLowerCase()}`;
 
-  // 1. CHECK MEMORY CACHE
-  if (memoryCache.has(cacheKey)) {
-    return memoryCache.get(cacheKey)!;
-  }
+  // 1. MEMORY CACHE
+  if (memoryCache.has(cacheKey)) return memoryCache.get(cacheKey)!;
 
-  // 2. CHECK PERSISTENT DB CACHE (IndexedDB)
+  // 2. DB CACHE
   const cachedArrayBuffer = await getAudioFromDB(cacheKey);
   if (cachedArrayBuffer) {
     const audioBuffer = await decodeAudioData(cachedArrayBuffer, ctx, 24000, 1);
-    memoryCache.set(cacheKey, audioBuffer); // Promuovi in memoria
+    memoryCache.set(cacheKey, audioBuffer);
     return audioBuffer;
   }
 
-  // 3. CALL GEMINI API
+  // 3. API CALL (GEMINI)
   const ai = new GoogleGenAI({ apiKey });
-  const prompt = `Dì con voce molto chiara e amichevole: ${text}`;
-  const voiceName = 'Kore';
+  const prompt = `Dì chiaramente in italiano: ${text}`;
 
   try {
     const response = await ai.models.generateContent({
@@ -135,7 +123,7 @@ const ensureAudioLoaded = async (text: string, language: 'it' | 'en'): Promise<A
         responseModalities: [Modality.AUDIO],
         speechConfig: {
           voiceConfig: {
-            prebuiltVoiceConfig: { voiceName },
+            prebuiltVoiceConfig: { voiceName: 'Kore' },
           },
         },
       },
@@ -144,48 +132,24 @@ const ensureAudioLoaded = async (text: string, language: 'it' | 'en'): Promise<A
     const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
     if (base64Audio) {
       const rawBytes = decode(base64Audio);
-      
-      // Save raw PCM bytes to DB
       saveAudioToDB(cacheKey, rawBytes.buffer);
-
-      // Decode and Cache
       const audioBuffer = await decodeAudioData(rawBytes, ctx, 24000, 1);
       memoryCache.set(cacheKey, audioBuffer);
-      
       return audioBuffer;
     }
   } catch (error: any) {
-    // Gestione errore Quota Exhausted (429)
-    // Checks for standard status/code or nested error object structure often returned by the API
-    const isQuotaError = 
-      error?.status === 429 || 
-      error?.code === 429 || 
-      error?.error?.code === 429 || 
-      error?.error?.status === 'RESOURCE_EXHAUSTED' ||
-      (error?.message && (
-        error.message.includes('429') || 
-        error.message.includes('quota') || 
-        error.message.includes('RESOURCE_EXHAUSTED')
-      ));
-
-    if (isQuotaError) {
-      if (!isQuotaExhausted) {
-        console.warn("Gemini API Quota Exceeded. Switching to browser TTS fallback for this session.");
-        isQuotaExhausted = true;
-      }
-    } else {
-      console.error("Gemini TTS Preload/Fetch Error:", error);
+    if (error?.status === 429 || error?.message?.includes('429')) {
+      console.warn("Quota Gemini esaurita per questa sessione. Fallback su browser TTS.");
+      isQuotaExhausted = true;
     }
   }
   return null;
 };
 
-// Public: Preloads audio silently. Good for calling at start of turn.
 export const preloadAudio = async (text: string, language: 'it' | 'en' = 'it') => {
   await ensureAudioLoaded(text, language);
 };
 
-// Public: Plays audio (fetching if necessary)
 export const speakWithGemini = async (text: string, language: 'it' | 'en' = 'it') => {
   if (language === 'en') {
     speakInstant(text, language);
@@ -193,45 +157,26 @@ export const speakWithGemini = async (text: string, language: 'it' | 'en' = 'it'
   }
 
   const ctx = getAudioContext();
-  if (ctx.state === 'suspended') {
-    await ctx.resume();
-  }
+  if (ctx.state === 'suspended') await ctx.resume();
 
   try {
-    // Ensure loaded (might already be cached thanks to preloadAudio)
     const audioBuffer = await ensureAudioLoaded(text, language);
-    
     if (audioBuffer) {
-      playBuffer(audioBuffer, ctx);
+      const source = ctx.createBufferSource();
+      source.buffer = audioBuffer;
+      source.connect(ctx.destination);
+      source.start();
     } else {
-      // Fallback if buffer creation failed or quota exceeded
       speakInstant(text, language);
     }
   } catch (e) {
-    console.error("Playback error", e);
     speakInstant(text, language);
   }
-};
-
-const playBuffer = (buffer: AudioBuffer, ctx: AudioContext) => {
-  const source = ctx.createBufferSource();
-  source.buffer = buffer;
-  source.connect(ctx.destination);
-  source.start();
 };
 
 export const speakInstant = (text: string, language: 'it' | 'en' = 'it') => {
   const utter = new SpeechSynthesisUtterance(text);
   utter.lang = language === 'it' ? 'it-IT' : 'en-US';
-  
-  const voices = window.speechSynthesis.getVoices();
-  const preferredVoice = voices.find(v => 
-    v.lang.startsWith(language === 'it' ? 'it' : 'en') && 
-    (v.name.includes('Google') || v.name.includes('Premium'))
-  );
-  if (preferredVoice) utter.voice = preferredVoice;
-
-  utter.rate = 0.9;
   window.speechSynthesis.cancel(); 
   window.speechSynthesis.speak(utter);
 };
