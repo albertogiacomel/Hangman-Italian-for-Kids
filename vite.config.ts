@@ -5,7 +5,7 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
   
   // Cloud Run inietta la porta tramite la variabile d'ambiente PORT.
-  // È fondamentale ascoltare su questa porta per superare l'health check.
+  // È fondamentale che sia il server di dev che quello di preview ascoltino su questa porta.
   const port = parseInt(process.env.PORT || '8080');
 
   return {
