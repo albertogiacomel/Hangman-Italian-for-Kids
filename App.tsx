@@ -8,6 +8,7 @@ import { HangmanVisual } from './components/HangmanVisual';
 import { Keyboard } from './components/Keyboard';
 import { ProgressBar } from './components/ProgressBar';
 import { AdBanner } from './components/AdBanner';
+import { speakWithGemini } from './services/audioService';
 
 export default function App() {
   const [language, setLanguage] = useState<Language>(() => (localStorage.getItem('appLanguage') as Language) || 'it');
@@ -36,7 +37,6 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-blue-50 dark:bg-gray-950 text-gray-900 dark:text-gray-100 transition-colors duration-300 font-sans selection:bg-blue-200">
-      {/* HEADER PROFESSIONALE */}
       <header className="bg-white dark:bg-gray-900 shadow-sm sticky top-0 z-20 px-4 py-3 flex items-center justify-between border-b dark:border-gray-800">
         <div className="flex items-center gap-2">
           <div className="bg-blue-600 text-white p-2 rounded-lg text-xl shadow-inner">🇮🇹</div>
@@ -48,7 +48,7 @@ export default function App() {
         <div className="flex items-center gap-2 sm:gap-3">
           <div className="bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400 px-3 py-1 rounded-full text-xs font-bold border border-orange-200 dark:border-orange-800">🔥 {state.streak}</div>
           <div className="bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400 px-3 py-1 rounded-full text-xs font-bold border border-yellow-200 dark:border-yellow-800">⭐ {state.totalStars}</div>
-          <button onClick={() => setTheme(t => t === 'light' ? 'dark' : 'light')} className="p-2 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition-colors" title="Toggle Theme">
+          <button onClick={() => setTheme(t => t === 'light' ? 'dark' : 'light')} className="p-2 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition-colors">
             {theme === 'light' ? '🌙' : '☀️'}
           </button>
           <button onClick={() => setIsMenuOpen(true)} className="p-2 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition-colors">
@@ -58,7 +58,6 @@ export default function App() {
       </header>
 
       <main className="max-w-4xl mx-auto p-4 md:p-8">
-        {/* BARRA DI PROGRESSO LIVELLO */}
         <div className="mb-6 bg-white dark:bg-gray-900 p-4 rounded-2xl shadow-sm border dark:border-gray-800">
           <ProgressBar 
             current={state.difficultyProgress[state.currentDifficulty] % CONFIG.words_per_difficulty_level} 
@@ -67,15 +66,18 @@ export default function App() {
           />
         </div>
 
-        {/* AREA DI GIOCO CENTRALE */}
-        <div className="bg-white dark:bg-gray-900 rounded-3xl shadow-xl border-4 border-blue-100 dark:border-gray-800 p-6 md:p-10 text-center transition-colors">
+        <div className="bg-white dark:bg-gray-900 rounded-3xl shadow-xl border-4 border-blue-100 dark:border-gray-800 p-6 md:p-10 text-center transition-colors relative">
           <div className="flex flex-col md:flex-row items-center gap-8 md:gap-12">
             <div className="w-full md:w-1/3 flex justify-center">
               <HangmanVisual wrongGuesses={CONFIG.max_attempts - state.attemptsRemaining} />
             </div>
             <div className="w-full md:w-2/3 flex flex-col items-center gap-6">
-              <div className="px-4 py-2 bg-gray-50 dark:bg-gray-800 rounded-full text-xs font-bold uppercase tracking-widest text-gray-500 dark:text-gray-400 border dark:border-gray-700">
-                {CategoryEmoji[state.currentWord?.category as keyof typeof CategoryEmoji] || '🏷️'} {t.categories[state.currentWord?.category || '']}
+              <div className="flex items-center gap-2 px-4 py-2 bg-gray-50 dark:bg-gray-800 rounded-full text-xs font-bold uppercase tracking-widest text-gray-500 dark:text-gray-400 border dark:border-gray-700">
+                <span>{CategoryEmoji[state.currentWord?.category as keyof typeof CategoryEmoji] || '🏷️'} {t.categories[state.currentWord?.category || '']}</span>
+                <button 
+                  onClick={() => speakWithGemini(t.categories[state.currentWord?.category || ''], language)}
+                  className="ml-2 p-1 hover:text-blue-500 transition-colors"
+                >🔊</button>
               </div>
               
               <div className="text-4xl md:text-6xl font-mono font-bold tracking-tighter flex flex-wrap justify-center gap-x-3 gap-y-1">
@@ -117,7 +119,6 @@ export default function App() {
         <AdBanner label={t.ad_label} />
       </main>
 
-      {/* MODALE DI VITTORIA / SCONFITTA */}
       {(state.gameStatus === 'won' || state.gameStatus === 'lost') && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-md z-50 flex items-center justify-center p-4 animate-in fade-in duration-300">
           <div className="bg-white dark:bg-gray-900 rounded-3xl p-8 max-w-sm w-full text-center shadow-2xl animate-pop border-t-8 border-blue-500">
@@ -127,14 +128,36 @@ export default function App() {
             <h2 className="text-3xl font-title mb-4 text-gray-800 dark:text-white">
               {state.gameStatus === 'won' ? t.win_title : t.lose_title}
             </h2>
-            <div className="bg-blue-50 dark:bg-gray-800 p-6 rounded-2xl mb-8 border border-blue-100 dark:border-gray-700">
-              <div className="text-3xl font-bold uppercase text-blue-900 dark:text-blue-100 tracking-wider mb-1">
-                {state.currentWord?.italian}
+            <div className="space-y-4 mb-8">
+              <div className="bg-blue-50 dark:bg-gray-800 p-4 rounded-2xl border border-blue-100 dark:border-gray-700 flex items-center justify-between">
+                <div className="text-left">
+                  <div className="text-[10px] font-bold text-blue-400 uppercase">Italiano</div>
+                  <div className="text-2xl font-bold uppercase text-blue-900 dark:text-blue-100 tracking-wider">
+                    {state.currentWord?.italian}
+                  </div>
+                </div>
+                <button 
+                  onClick={() => speakWithGemini(state.currentWord?.italian || '', 'it')}
+                  className="bg-blue-600 text-white p-3 rounded-full shadow-lg hover:scale-110 transition-transform active:scale-90"
+                  aria-label="Ascolta Italiano"
+                >🔊</button>
               </div>
-              <div className="text-blue-600 dark:text-blue-400 italic text-xl">
-                {state.currentWord?.english}
+
+              <div className="bg-orange-50 dark:bg-gray-800/50 p-4 rounded-2xl border border-orange-100 dark:border-gray-700 flex items-center justify-between">
+                <div className="text-left">
+                  <div className="text-[10px] font-bold text-orange-400 uppercase">English</div>
+                  <div className="text-xl font-medium text-orange-700 dark:text-orange-300 italic">
+                    {state.currentWord?.english}
+                  </div>
+                </div>
+                <button 
+                  onClick={() => speakWithGemini(state.currentWord?.english || '', 'en')}
+                  className="bg-orange-500 text-white p-3 rounded-full shadow-lg hover:scale-110 transition-transform active:scale-90"
+                  aria-label="Listen English"
+                >🔊</button>
               </div>
             </div>
+            
             <button 
               onClick={selectNewWord} 
               className="w-full bg-blue-600 text-white font-bold py-5 rounded-2xl shadow-lg hover:bg-blue-700 active:scale-95 transition-all text-xl"
@@ -145,7 +168,6 @@ export default function App() {
         </div>
       )}
 
-      {/* MENU IMPOSTAZIONI OVERLAY */}
       {isMenuOpen && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in">
           <div className="bg-white dark:bg-gray-900 rounded-2xl p-6 w-full max-w-sm shadow-2xl border dark:border-gray-800">
@@ -155,7 +177,7 @@ export default function App() {
             </div>
             <div className="space-y-6">
               <div className="space-y-2">
-                <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">{t.language_label || "Lingua UI"}</label>
+                <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Lingua UI</label>
                 <div className="grid grid-cols-2 gap-2 bg-gray-100 dark:bg-gray-800 p-1.5 rounded-xl">
                   <button onClick={() => toggleLanguage('it')} className={`py-2 rounded-lg text-sm font-bold transition-all ${language === 'it' ? 'bg-white dark:bg-gray-600 shadow-sm text-blue-600 dark:text-blue-100' : 'text-gray-500'}`}>🇮🇹 IT</button>
                   <button onClick={() => toggleLanguage('en')} className={`py-2 rounded-lg text-sm font-bold transition-all ${language === 'en' ? 'bg-white dark:bg-gray-600 shadow-sm text-blue-600 dark:text-blue-100' : 'text-gray-500'}`}>🇬🇧 EN</button>
@@ -163,10 +185,7 @@ export default function App() {
               </div>
 
               <div className="flex justify-between items-center bg-gray-50 dark:bg-gray-800 p-4 rounded-xl border dark:border-gray-700">
-                <div className="flex flex-col">
-                  <span className="font-bold text-gray-700 dark:text-gray-200">{t.sfx_label}</span>
-                  <span className="text-[10px] text-gray-400 uppercase font-bold">{sfxEnabled ? "On" : "Off"}</span>
-                </div>
+                <span className="font-bold text-gray-700 dark:text-gray-200">{t.sfx_label}</span>
                 <button onClick={toggleSfx} className={`w-14 h-8 rounded-full relative transition-colors ${sfxEnabled ? 'bg-blue-600' : 'bg-gray-300 dark:bg-gray-700'}`}>
                    <div className={`absolute top-1 w-6 h-6 bg-white rounded-full transition-all shadow-sm ${sfxEnabled ? 'left-7' : 'left-1'}`} />
                 </button>
@@ -179,14 +198,13 @@ export default function App() {
                 {t.reset_btn}
               </button>
             </div>
-            <div className="mt-8 text-center text-[10px] text-gray-400 font-mono">v1.1.0 • Professional Edition</div>
           </div>
         </div>
       )}
       
       <footer className="text-center p-8 text-gray-400 dark:text-gray-500 text-xs">
         <p className="mb-1">{t.keyboard_msg}</p>
-        <p className="font-bold text-gray-500 dark:text-gray-400">{t.slogan} • &copy; 2026</p>
+        <p className="font-bold text-gray-500 dark:text-gray-400">{t.slogan}</p>
       </footer>
     </div>
   );

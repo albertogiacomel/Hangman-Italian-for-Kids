@@ -4,7 +4,7 @@ import { GoogleGenAI, Modality } from "@google/genai";
 // --- SFX LOGIC ---
 let sfxCtx: AudioContext | null = null;
 const getSfxCtx = () => {
-  if (!sfxCtx) sfxCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+  if (!sfxCtx) sfxCtx = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
   return sfxCtx;
 };
 
@@ -21,7 +21,7 @@ const playTone = (freq: number, type: OscillatorType, duration: number, startTim
   osc.start(ctx.currentTime + startTime); osc.stop(ctx.currentTime + startTime + duration);
 };
 
-export const playClickSound = () => playTone(600, 'sine', 0.1);
+export const playInteractionsSound = () => playTone(600, 'sine', 0.1);
 export const playWinSound = () => {
   playTone(523.25, 'triangle', 0.2, 0);
   playTone(659.25, 'triangle', 0.2, 0.1);
@@ -48,7 +48,6 @@ const decode = (base64: string) => {
   return bytes;
 };
 
-// Use robust decoding with explicit offset and length for raw PCM audio from Gemini
 const decodeAudioData = async (data: Uint8Array, ctx: AudioContext) => {
   const dataInt16 = new Int16Array(data.buffer, data.byteOffset, data.byteLength / 2);
   const buffer = ctx.createBuffer(1, dataInt16.length, 24000);
@@ -59,42 +58,61 @@ const decodeAudioData = async (data: Uint8Array, ctx: AudioContext) => {
 
 const memoryCache = new Map<string, AudioBuffer>();
 
-export const preloadAudio = async (text: string) => {
-  if (memoryCache.has(text) || !process.env.API_KEY) return;
+export const preloadAudio = async (text: string, lang: 'it' | 'en' = 'it') => {
+  const cacheKey = `${lang}:${text.toLowerCase()}`;
+  if (memoryCache.has(cacheKey) || !process.env.API_KEY) return;
+  
   try {
-    // Always initialize GoogleGenAI with a named parameter object
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    const voiceName = lang === 'it' ? 'Kore' : 'Puck';
     const response = await ai.models.generateContent({
       model: "gemini-2.5-flash-preview-tts",
-      contents: [{ parts: [{ text: `Dì: ${text}` }] }],
+      contents: [{ parts: [{ text: lang === 'it' ? `Dì chiaramente: ${text}` : `Say clearly: ${text}` }] }],
       config: {
         responseModalities: [Modality.AUDIO],
-        speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Kore' } } },
+        speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName } } },
       },
     });
+    
     const base64 = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
     if (base64) {
       const buffer = await decodeAudioData(decode(base64), getSfxCtx());
-      memoryCache.set(text, buffer);
+      memoryCache.set(cacheKey, buffer);
+      console.debug(`Cached audio for: ${cacheKey}`);
     }
-  } catch (e) {}
+  } catch (e) {
+    console.warn("TTS Preload failed", e);
+  }
 };
 
-export const speakWithGemini = async (text: string) => {
+export const speakWithGemini = async (text: string, lang: 'it' | 'en' = 'it') => {
   const ctx = getSfxCtx();
   if (ctx.state === 'suspended') await ctx.resume();
-  const cached = memoryCache.get(text);
+  
+  const cacheKey = `${lang}:${text.toLowerCase()}`;
+  const cached = memoryCache.get(cacheKey);
+
   if (cached) {
     const source = ctx.createBufferSource();
-    source.buffer = cached; source.connect(ctx.destination); source.start();
+    source.buffer = cached;
+    source.connect(ctx.destination);
+    source.start();
+    return new Promise(resolve => source.onended = resolve);
   } else {
-    speakInstant(text, 'it');
+    // Fallback istantaneo se non in cache, ma cerchiamo di precaricare per la prossima volta
+    preloadAudio(text, lang);
+    speakInstant(text, lang);
+    return Promise.resolve();
   }
 };
 
 export const speakInstant = (text: string, lang: 'it' | 'en') => {
+  // Solo se non stiamo già parlando una parola lunga
+  if (window.speechSynthesis.speaking) {
+      window.speechSynthesis.cancel();
+  }
   const utter = new SpeechSynthesisUtterance(text);
   utter.lang = lang === 'it' ? 'it-IT' : 'en-US';
-  window.speechSynthesis.cancel();
+  utter.rate = 1.1; // Leggermente più veloce per le lettere
   window.speechSynthesis.speak(utter);
 };
