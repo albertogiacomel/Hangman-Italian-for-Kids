@@ -1,14 +1,26 @@
+import {getGameSettings} from '../shared/game-kit';
 
 import { GoogleGenAI, Modality } from "@google/genai";
 
+const settings = getGameSettings('hangman');
+const allowed = (channel: 'effects' | 'voice') => { const value=settings.getSnapshot();return !value.muted&&value[channel]; };
+const activeVoice = new Set<AudioBufferSourceNode>();
+settings.subscribe(() => {
+  if(!allowed('effects')){for(const source of activeEffects)source.stop();activeEffects.clear();}
+  if(!allowed('voice')) { for(const source of activeVoice) source.stop(); activeVoice.clear(); window.speechSynthesis?.cancel(); }
+  if(sfxCtx) { if(!allowed('effects')&&!allowed('voice')) void sfxCtx.suspend(); else if(sfxCtx.state==='suspended') void sfxCtx.resume(); }
+});
 // --- SFX LOGIC ---
 let sfxCtx: AudioContext | null = null;
+const activeEffects=new Set<AudioScheduledSourceNode>();
+const trackEffect=(source:AudioScheduledSourceNode)=>{activeEffects.add(source);source.onended=()=>activeEffects.delete(source);};
 const getSfxCtx = () => {
   if (!sfxCtx) sfxCtx = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
   return sfxCtx;
 };
 
 const playTone = (freq: number, type: OscillatorType, duration: number, startTime: number = 0) => {
+  if (!allowed('effects')) return;
   const ctx = getSfxCtx();
   if (ctx.state === 'suspended') ctx.resume();
   const osc = ctx.createOscillator();
@@ -18,7 +30,7 @@ const playTone = (freq: number, type: OscillatorType, duration: number, startTim
   gain.gain.setValueAtTime(0.1, ctx.currentTime + startTime);
   gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + startTime + duration);
   osc.connect(gain); gain.connect(ctx.destination);
-  osc.start(ctx.currentTime + startTime); osc.stop(ctx.currentTime + startTime + duration);
+  trackEffect(osc);osc.start(ctx.currentTime + startTime); osc.stop(ctx.currentTime + startTime + duration);
 };
 
 export const playInteractionsSound = () => playTone(600, 'sine', 0.1);
@@ -28,6 +40,7 @@ export const playWinSound = () => {
   playTone(783.99, 'triangle', 0.4, 0.2);
 };
 export const playLoseSound = () => {
+  if (!allowed('effects')) return;
   const ctx = getSfxCtx();
   const osc = ctx.createOscillator();
   const gain = ctx.createGain();
@@ -37,7 +50,7 @@ export const playLoseSound = () => {
   gain.gain.setValueAtTime(0.1, ctx.currentTime);
   gain.gain.linearRampToValueAtTime(0, ctx.currentTime + 0.5);
   osc.connect(gain); gain.connect(ctx.destination);
-  osc.start(); osc.stop(ctx.currentTime + 0.5);
+  trackEffect(osc);osc.start(); osc.stop(ctx.currentTime + 0.5);
 };
 
 // --- GEMINI TTS LOGIC ---
@@ -86,6 +99,7 @@ export const preloadAudio = async (text: string, lang: 'it' | 'en' = 'it') => {
 };
 
 export const speakWithGemini = async (text: string, lang: 'it' | 'en' = 'it') => {
+  if (!allowed('voice')) return;
   const ctx = getSfxCtx();
   if (ctx.state === 'suspended') await ctx.resume();
   
@@ -96,8 +110,9 @@ export const speakWithGemini = async (text: string, lang: 'it' | 'en' = 'it') =>
     const source = ctx.createBufferSource();
     source.buffer = cached;
     source.connect(ctx.destination);
-    source.start();
-    return new Promise(resolve => source.onended = resolve);
+    if (!allowed('voice')) return;
+    activeVoice.add(source); source.start();
+    return new Promise(resolve => source.onended = event => {activeVoice.delete(source);resolve(event);});
   } else {
     // Fallback istantaneo se non in cache, ma cerchiamo di precaricare per la prossima volta
     preloadAudio(text, lang);
@@ -107,6 +122,7 @@ export const speakWithGemini = async (text: string, lang: 'it' | 'en' = 'it') =>
 };
 
 export const speakInstant = (text: string, lang: 'it' | 'en') => {
+  if (!allowed('voice')) return;
   // Solo se non stiamo già parlando una parola lunga
   if (window.speechSynthesis.speaking) {
       window.speechSynthesis.cancel();

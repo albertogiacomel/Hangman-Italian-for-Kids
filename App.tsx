@@ -1,5 +1,6 @@
+import {useGamePreferences,GameKitControls} from './shared/game-kit';
 
-import React, { useState, useEffect } from 'react';
+import React, { useEffect } from 'react';
 import { Language, CategoryEmoji } from './data/types';
 import { CONFIG } from './data/constants';
 import { TRANSLATIONS } from './data/translations';
@@ -11,19 +12,17 @@ import { AdBanner } from './components/AdBanner';
 import { speakWithGemini } from './services/audioService';
 
 export default function App() {
-  const [language, setLanguage] = useState<Language>(() => (localStorage.getItem('appLanguage') as Language) || 'it');
-  const [theme, setTheme] = useState(() => (localStorage.getItem('theme') as 'light' | 'dark') || 'light');
-  const [sfxEnabled, setSfxEnabled] = useState(() => JSON.parse(localStorage.getItem('sfxEnabled') || 'true'));
-  const [isMenuOpen, setIsMenuOpen] = useState(false);
-
-  const { state, handleLetterGuess, handleHint, selectNewWord, resetGame } = useHangman(language, sfxEnabled);
+  const {preferences: kitPreferences} = useGamePreferences('hangman');
+  const language = kitPreferences.language as Language;
+  const sfxEnabled = !kitPreferences.muted && kitPreferences.effects;
+  const { state, handleLetterGuess, handleHint, selectNewWord, resetGame } = useHangman(language, sfxEnabled, kitPreferences.difficulty);
   const t = TRANSLATIONS[language];
 
   // Listener per la tastiera fisica
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       // Ignora combinazioni di tasti di sistema
-      if (e.ctrlKey || e.altKey || e.metaKey) return;
+      if (e.ctrlKey || e.altKey || e.metaKey || (e.target as HTMLElement).closest?.('dialog[open],input,select,textarea')) return;
       
       const key = e.key.toLowerCase();
       // Verifica se è una lettera a-z
@@ -35,22 +34,6 @@ export default function App() {
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [handleLetterGuess]);
-
-  useEffect(() => {
-    document.documentElement.classList.toggle('dark', theme === 'dark');
-    localStorage.setItem('theme', theme);
-  }, [theme]);
-
-  const toggleLanguage = (lang: Language) => {
-    setLanguage(lang);
-    localStorage.setItem('appLanguage', lang);
-  };
-
-  const toggleSfx = () => {
-    const newValue = !sfxEnabled;
-    setSfxEnabled(newValue);
-    localStorage.setItem('sfxEnabled', JSON.stringify(newValue));
-  };
 
   return (
     <div className="min-h-screen bg-blue-50 dark:bg-gray-950 text-gray-900 dark:text-gray-100 transition-colors duration-300 font-sans selection:bg-blue-200">
@@ -65,12 +48,10 @@ export default function App() {
         <div className="flex items-center gap-2 sm:gap-3">
           <div className="bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400 px-3 py-1 rounded-full text-xs font-bold border border-orange-200 dark:border-orange-800">🔥 {state.streak}</div>
           <div className="bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400 px-3 py-1 rounded-full text-xs font-bold border border-yellow-200 dark:border-yellow-800">⭐ {state.totalStars}</div>
-          <button onClick={() => setTheme(t => t === 'light' ? 'dark' : 'light')} className="p-2 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition-colors">
-            {theme === 'light' ? '🌙' : '☀️'}
-          </button>
-          <button onClick={() => setIsMenuOpen(true)} className="p-2 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition-colors">
-            ☰
-          </button>
+          <GameKitControls gameId="hangman" />
+          <button className="ag-button ag-button--danger" onClick={() => {
+            if(window.confirm(language === 'it' ? 'Azzerare i progressi?' : 'Reset progress?')) resetGame();
+          }}>{t.reset_btn}</button>
         </div>
       </header>
 
@@ -185,40 +166,6 @@ export default function App() {
         </div>
       )}
 
-      {isMenuOpen && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in">
-          <div className="bg-white dark:bg-gray-900 rounded-2xl p-6 w-full max-w-sm shadow-2xl border dark:border-gray-800">
-            <div className="flex justify-between items-center mb-8">
-              <h2 className="text-2xl font-bold text-gray-800 dark:text-white">{t.menu}</h2>
-              <button onClick={() => setIsMenuOpen(false)} className="text-gray-400 hover:text-gray-600 text-2xl p-2">✕</button>
-            </div>
-            <div className="space-y-6">
-              <div className="space-y-2">
-                <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Lingua UI</label>
-                <div className="grid grid-cols-2 gap-2 bg-gray-100 dark:bg-gray-800 p-1.5 rounded-xl">
-                  <button onClick={() => toggleLanguage('it')} className={`py-2 rounded-lg text-sm font-bold transition-all ${language === 'it' ? 'bg-white dark:bg-gray-600 shadow-sm text-blue-600 dark:text-blue-100' : 'text-gray-500'}`}>🇮🇹 IT</button>
-                  <button onClick={() => toggleLanguage('en')} className={`py-2 rounded-lg text-sm font-bold transition-all ${language === 'en' ? 'bg-white dark:bg-gray-600 shadow-sm text-blue-600 dark:text-blue-100' : 'text-gray-500'}`}>🇬🇧 EN</button>
-                </div>
-              </div>
-
-              <div className="flex justify-between items-center bg-gray-50 dark:bg-gray-800 p-4 rounded-xl border dark:border-gray-700">
-                <span className="font-bold text-gray-700 dark:text-gray-200">{t.sfx_label}</span>
-                <button onClick={toggleSfx} className={`w-14 h-8 rounded-full relative transition-colors ${sfxEnabled ? 'bg-blue-600' : 'bg-gray-300 dark:bg-gray-700'}`}>
-                   <div className={`absolute top-1 w-6 h-6 bg-white rounded-full transition-all shadow-sm ${sfxEnabled ? 'left-7' : 'left-1'}`} />
-                </button>
-              </div>
-
-              <button 
-                onClick={() => { resetGame(); setIsMenuOpen(false); }} 
-                className="w-full py-4 text-red-600 dark:text-red-400 font-bold bg-red-50 dark:bg-red-900/20 rounded-xl hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors border border-red-100 dark:border-red-900/50"
-              >
-                {t.reset_btn}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-      
       <footer className="text-center p-8 text-gray-400 dark:text-gray-500 text-xs">
         <p className="mb-1">{t.keyboard_msg}</p>
         <p className="font-bold text-gray-500 dark:text-gray-400">{t.slogan}</p>

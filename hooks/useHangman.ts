@@ -5,7 +5,7 @@ import { INITIAL_WORDS, CONFIG, ITALIAN_ALPHABET } from '../data/constants';
 import { TRANSLATIONS } from '../data/translations';
 import { playInteractionsSound, playWinSound, playLoseSound, speakWithGemini, preloadAudio, speakInstant } from '../services/audioService';
 
-export function useHangman(language: Language, sfxEnabled: boolean) {
+export function useHangman(language: Language, sfxEnabled: boolean, requestedDifficulty: string) {
   const t = TRANSLATIONS[language];
   
   const getInitialState = (): GameState => {
@@ -39,6 +39,11 @@ export function useHangman(language: Language, sfxEnabled: boolean) {
   };
 
   const [state, setState] = useState<GameState>(getInitialState);
+  useEffect(() => {
+    if (!['easy','medium','hard'].includes(requestedDifficulty)) return;
+    setState(previous => ({...previous, currentDifficulty: requestedDifficulty as GameState['currentDifficulty'], currentWord:null, guessedLetters:[], attemptsRemaining:CONFIG.max_attempts, gameStatus:'new', feedback:''}));
+  }, [requestedDifficulty]);
+
 
   useEffect(() => {
     localStorage.setItem('italianHangmanState', JSON.stringify({

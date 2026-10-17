@@ -1,3 +1,5 @@
+> Impostazioni e controlli condivisi: [integrazione Videogames Kit](docs/videogames-kit.md).
+
 
 # Italian Hangman 🇮🇹
 
