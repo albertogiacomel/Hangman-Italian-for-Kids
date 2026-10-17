@@ -55,8 +55,8 @@ export default function App() {
         </div>
       </header>
 
-      <main className="max-w-4xl mx-auto p-4 md:p-8">
-        <div className="mb-6 bg-white dark:bg-gray-900 p-4 rounded-2xl shadow-sm border dark:border-gray-800">
+      <main className="ag-equal-items grid grid-cols-1 max-w-4xl mx-auto p-4 md:p-8">
+        <div className="bg-white dark:bg-gray-900 p-4 rounded-2xl shadow-sm border dark:border-gray-800">
           <ProgressBar 
             current={state.difficultyProgress[state.currentDifficulty] % CONFIG.words_per_difficulty_level} 
             max={CONFIG.words_per_difficulty_level} 
