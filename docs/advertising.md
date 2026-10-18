@@ -27,6 +27,14 @@ Evitare inviti all'acquisto rivolti ai bambini, richieste di dati personali, mes
 
 ## Eventuale provider automatico
 
+Il proprietario ha fornito la dichiarazione pubblica AdSense seguente, salvata in `public/ads.txt` e copiata da Vite in `dist/ads.txt`:
+
+```text
+google.com, pub-8896739816580918, DIRECT, f08c47fec0942fa0
+```
+
+L'URL previsto è https://hangman.giacomel.info/ads.txt. Il sito del dominio principale pubblica `subdomain=hangman.giacomel.info` nel proprio `ads.txt`, per indicare il file specifico del gioco. La dichiarazione autorizza il venditore indicato; non carica annunci, non dimostra l'approvazione del sito o dell'account e non configura il trattamento del pubblico infantile. Questa modifica non attiva AdSense: lo sponsor statico resta disattivato e nessuno script pubblicitario è stato reintrodotto. Vedere le [FAQ ufficiali ads.txt e sottodomini](https://support.google.com/adsense/answer/9785052?hl=en).
+
 Non attivare AdSense reinserendo il vecchio snippet. Servono un account e un sito approvati, identificativi reali, impostazioni del pubblico, controlli sui contenuti e una verifica aggiornata delle condizioni del provider e delle scelte privacy. La pubblicità non personalizzata non equivale automaticamente ad assenza di cookie.
 
 Documentazione Google consultata il 18 ottobre 2026:
