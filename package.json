@@ -5,15 +5,15 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "node scripts/site-privacy-check.mjs && node scripts/game-kit-check.mjs && vite build",
+    "build": "node scripts/site-privacy-check.js && node scripts/game-kit-check.js && vite build",
     "start": "vite preview",
     "preview": "vite preview",
-    "check:kit": "node scripts/game-kit-check.mjs",
-    "test:kit": "node --test scripts/game-kit-test.mjs",
-    "test:kit:browser": "node scripts/game-kit-browser-test.mjs",
+    "check:kit": "node scripts/game-kit-check.js",
+    "test:kit": "node --test scripts/game-kit-test.js",
+    "test:kit:browser": "node scripts/game-kit-browser-test.js",
     "check:types": "tsc --noEmit",
-    "test:sponsorship": "node scripts/sponsorship-test.mjs",
-    "check:privacy": "node scripts/site-privacy-check.mjs"
+    "test:sponsorship": "node scripts/sponsorship-test.js",
+    "check:privacy": "node scripts/site-privacy-check.js"
   },
   "dependencies": {
     "react": "19.0.0",

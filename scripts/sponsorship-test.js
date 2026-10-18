@@ -1,13 +1,12 @@
 import assert from 'node:assert/strict';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
-import { fileURLToPath } from 'node:url';
 import { join } from 'node:path';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { createServer } from 'vite';
-import { openBrowser, delay } from './game-kit-cdp.mjs';
+import { openBrowser, delay } from './game-kit-cdp.js';
 
-const root = fileURLToPath(new URL('../', import.meta.url));
+const root = join(import.meta.dirname, '..');
 const artifacts = join(root, 'artifacts', 'sponsorship');
 await mkdir(artifacts, { recursive: true });
 const server = await createServer({ root, server: { middlewareMode: true }, appType: 'custom' });
