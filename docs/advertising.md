@@ -24,6 +24,6 @@ Il dominio principale pubblica la stessa riga e i riferimenti ai giochi. L'integ
 
 ## Verifiche
 
-La build verifica il manifesto privacy oltre al kit. Il kit centrale prova il Klaro reale con scelte, persistenza, revoca, geometria mobile e axe chiaro/scuro; la richiesta pubblicitaria è simulata, senza contattare Google. Restano obbligatori i test di gioco e del sito pubblicato. Le copie generate si aggiornano tramite `scripts/sync-sites.mjs` del kit con piano e backup.
+La build verifica il manifesto privacy oltre al kit. Il kit centrale prova il Klaro reale con scelte, persistenza, revoca, geometria mobile e axe chiaro/scuro; la richiesta pubblicitaria è simulata, senza contattare Google. Restano obbligatori i test di gioco e del sito pubblicato. Le copie generate si aggiornano tramite `scripts/sync-sites.js` del kit con piano e backup.
 
 Fonti: [CHILD AdSense](https://support.google.com/adsense/answer/9009582?hl=en), [CMP](https://support.google.com/adsense/answer/13554116?hl=en), [messaggio europeo](https://support.google.com/adsense/answer/10960768?hl=en), [Klaro](https://github.com/kiprotect/klaro).
