@@ -1,38 +1,24 @@
-
-import React, { useEffect } from 'react';
+import React, { useId } from 'react';
+import { Language } from '../data/types';
+import { SPONSOR_MESSAGE, SponsorMessage } from '../data/sponsorship';
 
 interface AdBannerProps {
-  slot?: string;
-  label?: string;
+  language: Language;
+  message?: SponsorMessage | null;
 }
 
-export const AdBanner: React.FC<AdBannerProps> = ({ slot = "1234567890", label = "Annuncio pubblicitario" }) => {
-  useEffect(() => {
-    try {
-      // @ts-ignore
-      (window.adsbygoogle = window.adsbygoogle || []).push({});
-    } catch (e) {
-      console.error("Adsbygoogle error:", e);
-    }
-  }, []);
+/** A manually reviewed message, never a third-party advertising embed. */
+export const AdBanner: React.FC<AdBannerProps> = ({ language, message = SPONSOR_MESSAGE }) => {
+  const labelId = useId();
+  if (!message?.reviewed || !message.name.trim() || !message.copy[language]?.trim()) return null;
 
   return (
-    <div className="my-8 w-full flex flex-col items-center">
-      <span className="text-[10px] text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-1">{label}</span>
-      <div className="bg-gray-100 dark:bg-gray-800 border border-dashed border-gray-300 dark:border-gray-700 rounded-lg flex items-center justify-center overflow-hidden min-h-[100px] w-full max-w-[728px] transition-colors">
-        {/* Sostituire i parametri data-ad-client e data-ad-slot con i propri valori reali */}
-        <ins className="adsbygoogle"
-             style={{ display: 'block', width: '100%' }}
-             data-ad-client="ca-pub-XXXXXXXXXXXXXXXX"
-             data-ad-slot={slot}
-             data-ad-format="auto"
-             data-full-width-responsive="true"></ins>
-        
-        {/* Placeholder visibile solo se l'annuncio non viene caricato (per demo) */}
-        <div className="absolute text-gray-300 dark:text-gray-600 text-sm font-medium pointer-events-none">
-          Google Ads
-        </div>
-      </div>
-    </div>
+    <aside aria-labelledby={labelId} data-sponsor-message className="w-full min-w-0 rounded-2xl border border-gray-300 bg-white p-4 text-gray-800 shadow-sm dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100">
+      <p id={labelId} className="mb-2 text-sm font-semibold">
+        {language === 'it' ? 'Messaggio pubblicitario · Sponsor del gioco' : 'Advertisement · Game sponsor'}
+      </p>
+      <p className="break-words text-base font-bold leading-relaxed">{message.name}</p>
+      <p className="break-words text-base leading-relaxed">{message.copy[language]}</p>
+    </aside>
   );
 };

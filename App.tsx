@@ -114,7 +114,7 @@ export default function App() {
           </div>
         </div>
 
-        <AdBanner label={t.ad_label} />
+        <AdBanner language={language} />
       </main>
 
       {(state.gameStatus === 'won' || state.gameStatus === 'lost') && (

@@ -3,6 +3,8 @@
 
 # Italian Hangman 🇮🇹
 
+Hosting attuale: **Vercel**, su https://hangman.giacomel.info/. Per lo spazio sponsor facoltativo e la rimozione della vecchia prova AdSense, vedere [sponsorizzazioni e pubblicità](docs/advertising.md).
+
 A modern, interactive Hangman game designed to help users learn Italian vocabulary. Built with React, Tailwind CSS, and Google Gemini API for high-quality pronunciation.
 
 ## ✨ Features

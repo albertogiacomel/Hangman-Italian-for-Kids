@@ -14,6 +14,9 @@ jobs:
       - run: npm run check:types
       - run: npm run build
       - run: npm run test:kit
+      - run: npm run test:sponsorship
+        env:
+          BROWSER_BINARY: /usr/bin/google-chrome
       - name: Verify controls and gameplay in Chrome
         run: npm run test:kit:browser
         env:
@@ -25,3 +28,5 @@ jobs:
           path: |
             artifacts/game-kit/*.json
             artifacts/game-kit/*.png
+            artifacts/sponsorship/*.json
+            artifacts/sponsorship/*.png
