@@ -1,4 +1,5 @@
 import {getGameSettings} from '../shared/game-kit';
+import { hasOptionalConsent } from '../shared/site-privacy';
 
 import { GoogleGenAI, Modality } from "@google/genai";
 
@@ -73,7 +74,7 @@ const memoryCache = new Map<string, AudioBuffer>();
 
 export const preloadAudio = async (text: string, lang: 'it' | 'en' = 'it') => {
   const cacheKey = `${lang}:${text.toLowerCase()}`;
-  if (memoryCache.has(cacheKey) || !process.env.API_KEY) return;
+  if (memoryCache.has(cacheKey) || !process.env.API_KEY || !hasOptionalConsent('google-ai') || !allowed('voice')) return;
   
   try {
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
@@ -88,7 +89,7 @@ export const preloadAudio = async (text: string, lang: 'it' | 'en' = 'it') => {
     });
     
     const base64 = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
-    if (base64) {
+    if (base64 && hasOptionalConsent('google-ai')) {
       const buffer = await decodeAudioData(decode(base64), getSfxCtx());
       memoryCache.set(cacheKey, buffer);
       console.debug(`Cached audio for: ${cacheKey}`);
@@ -129,6 +130,11 @@ export const speakInstant = (text: string, lang: 'it' | 'en') => {
   }
   const utter = new SpeechSynthesisUtterance(text);
   utter.lang = lang === 'it' ? 'it-IT' : 'en-US';
+  if (!hasOptionalConsent('google-ai')) {
+    const voice = window.speechSynthesis.getVoices().find(v => v.localService && v.lang.toLowerCase().startsWith(lang));
+    if (!voice) return;
+    utter.voice = voice;
+  }
   utter.rate = 1.1; // Leggermente più veloce per le lettere
   window.speechSynthesis.speak(utter);
 };

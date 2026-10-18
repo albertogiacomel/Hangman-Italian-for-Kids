@@ -22,7 +22,7 @@ export default function App() {
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       // Ignora combinazioni di tasti di sistema
-      if (e.ctrlKey || e.altKey || e.metaKey || (e.target as HTMLElement).closest?.('dialog[open],input,select,textarea')) return;
+      if (e.ctrlKey || e.altKey || e.metaKey || (e.target as HTMLElement).closest?.('dialog[open],input,select,textarea,#klaro')) return;
       
       const key = e.key.toLowerCase();
       // Verifica se è una lettera a-z
